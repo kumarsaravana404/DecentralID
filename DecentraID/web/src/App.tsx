@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -120,7 +121,7 @@ export default function App() {
   };
 
   const startListeners = () => {
-    contracts.verification.on("VerificationRequested", (id: any, verifier: string, user: string, purpose: string) => {
+    contracts.verification.on("VerificationRequested", (_id: any, _verifier: string, user: string, _purpose: string) => {
       if (user.toLowerCase() === wallet?.toLowerCase()) {
         loadData();
       }

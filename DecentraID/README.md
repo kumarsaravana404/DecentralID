@@ -1,83 +1,72 @@
-# DecentraID - Enterprise Self-Sovereign Identity (SSI) System
+# DecentraID - Decentralized Identity Platform
 
-DecentraID is a production-grade, state-of-the-art decentralized identity system designed to eliminate the risks of centralized identity architectures. Built on blockchain technology and W3C standards, it empowers individuals with full ownership and control over their digital credentials.
+A self-sovereign identity (SSI) system built on blockchain technology, enabling users to own and control their digital identities.
 
-## 🚀 Key Features
+## 🌐 Live Demo
 
-- **Decentralized Identifiers (DIDs)**: Unique, persistent identifiers anchored on the Ethereum blockchain (did:eth:...).
-- **Verifiable Credentials (VCs)**: Digital proofs of identity attributes (National ID, Degree, Licenses) issued by trusted authorities.
-- **Zero-Knowledge Privacy**: Selective disclosure simulation allowing users to prove attributes (e.g., "Over 18") without revealing sensitive PII.
-- **Biometric Security**: Integrated Android mobile wallet with BiometricPrompt authentication.
-- **Immutability & Trust**: Complete audit trail of every identity interaction stored on-chain or in an immutable off-chain ledger.
+- **Frontend**: Deploy on Vercel
+- **Backend**: https://decentralid.onrender.com
+- **Blockchain**: Ethereum-compatible networks
 
-## 🌟 Technical Architecture
-
-### 1. Blockchain Layer (Solidity / Hardhat)
-
-- **IdentityRegistry.sol**: Manages DID registration, metadata updates, and identity revocation.
-- **CredentialRegistry.sol**: Handles the issuance and management of W3C-compliant Verifiable Credentials.
-- **VerificationRegistry.sol**: Manages secure verification requests and user consent tokens.
-- **ZK Hooks**: Prepared functions for ZK-SNARK verification integration.
-
-### 2. Backend Identity Services (Node.js / Express)
-
-- **Identity Service**: Handles AES-256 encryption/decryption of user data before anchoring.
-- **Verification Service**: Manages the selective disclosure flows and verification status.
-- **Audit Service**: Tracks and serves immutable logs for audit compliance.
-
-### 3. Web Intelligence Hub (React / Vite / Tailwind)
-
-- **Glassmorphic Interface**: Ultra-modern UI with real-time blockchain event synchronization.
-- **Identity Wallet**: Intuitive dashboard to view DIDs, manage credentials, and approve access requests.
-- **Animations**: Fluid transitions powered by Framer Motion for a premium user experience.
-
-### 4. Mobile Wallet (Android / Kotlin)
-
-- **Secure Storage**: Encrypted key management.
-- **Biometric Gate**: Hardware-backed authentication for credential sharing.
-
----
-
-## 🛠️ Quick Start
+## 🚀 Quick Start
 
 ### Prerequisites
 
-- Node.js (v18+)
-- MetaMask Browser Extension
-- (Optional) Android Studio for mobile development
+- Node.js v18+
+- MetaMask or compatible Web3 wallet
+- Ethereum testnet ETH (Sepolia recommended)
 
-### Full System Initialization
+### Local Development
+
+#### Backend
 
 ```bash
-# 1. Install dependencies for all layers
-npm run setup
+cd DecentraID/backend
+npm install
+npm start
+```
 
-# 2. Launch the entire ecosystem (Blockchain + Backend + Web)
+#### Frontend
+
+```bash
+cd DecentraID/web
+npm install
 npm run dev
 ```
 
-The `npm run dev` command orchestrates:
+## 📦 Deployment
 
-1. **Local Hardhat Node** (Port 8545)
-2. **Contract Deployment** & Config generation
-3. **Identity Backend API** (Port 5000)
-4. **Vite React Frontend** (Port 5173 / 3000)
+### Backend (Render.com)
 
----
+1. Connect GitHub repository
+2. Set **Root Directory**: `DecentraID/backend`
+3. **Build Command**: `npm install`
+4. **Start Command**: `node server.js`
 
-## 🔒 Security Model
+### Frontend (Vercel)
 
-- **Zero-Knowledge Architecture**: The backend never stores plaintext PII. All data is encrypted with client-derived keys.
-- **On-Chain Privacy**: Only cryptographic hashes and encrypted IPFS pointers are stored on the public ledger.
-- **Consent-First**: Verifiers can ONLY access identity attributes after an explicit on-chain consent transaction from the user.
+1. Import GitHub repository
+2. Set **Root Directory**: `DecentraID/web`
+3. **Framework**: Vite
+4. **Environment Variable**:
+   - `VITE_API_URL` = Your backend URL (e.g., https://decentralid.onrender.com)
 
-## 📂 Project Structure
+## 🏗️ Architecture
 
-- `/blockchain`: Smart contracts, Hardhat configuration, and deployment scripts.
-- `/backend`: Node.js services for encryption, auditing, and verification.
-- `/web`: Modern React frontend with Tailwind CSS and Framer Motion.
-- `/android`: Kotlin-based mobile wallet with biometric security.
+- **Frontend**: React + TypeScript + Vite + Tailwind CSS
+- **Backend**: Node.js + Express
+- **Blockchain**: Smart contracts (Solidity)
+- **Encryption**: AES-256-CBC
 
----
+## 🔐 Features
 
-_Created by DecentraID Engineering Team & Antigravity AI._
+- ✅ Self-sovereign identity creation
+- ✅ Verifiable credentials
+- ✅ Zero-knowledge proofs (simulated)
+- ✅ Audit logging
+- ✅ Wallet integration (MetaMask)
+- ✅ End-to-end encryption
+
+## 📄 License
+
+MIT
