@@ -1,0 +1,17 @@
+{
+  "name": "decentraid-monorepo",
+  "version": "1.0.0",
+  "description": "Orchestrator for DecentraID System",
+  "scripts": {
+    "setup": "npm install && cd blockchain && npm install && cd ../backend && npm install && cd ../web && npm install",
+    "chain": "cd blockchain && npx hardhat node",
+    "deploy": "cd blockchain && npx hardhat run scripts/deploy.js --network localhost",
+    "backend": "cd backend && node server.js",
+    "frontend": "cd web && npm run dev",
+    "dev": "concurrently -k -n \"CHAIN,DEPLOY,BACKEND,WEB\" -c \"blue,green,magenta,cyan\" \"npm run chain\" \"wait-on tcp:8545 && npm run deploy && npm run backend\" \"wait-on tcp:8545 && wait-on file:web/config.json && npm run frontend\""
+  },
+  "dependencies": {
+    "concurrently": "^8.2.2",
+    "wait-on": "^7.2.0"
+  }
+}

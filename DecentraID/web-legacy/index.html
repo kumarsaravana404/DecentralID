@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DecentraID | Enterprise SSI System</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <script src="https://cdn.ethers.io/lib/ethers-5.7.umd.min.js" type="application/javascript"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+    <div class="blob"></div>
+    <div class="blob blob-2"></div>
+
+    <div class="app-container">
+        <header class="fade-in">
+            <div class="logo-container">
+                <div class="logo-icon">🆔</div>
+                <div class="logo-text">DecentraID</div>
+            </div>
+            <div class="header-controls">
+                <div class="network-badge" id="networkBadge">
+                    <span class="dot-status"></span> <span id="networkName">Not Connected</span>
+                </div>
+                <button id="connectWallet" class="btn-connect">Connect Wallet</button>
+            </div>
+        </header>
+
+        <!-- Navigation Tabs -->
+        <nav class="nav-tabs fade-in" style="animation-delay: 0.1s; display:none;" id="mainNav">
+            <button class="nav-tab active" onclick="switchTab('dashboard')">Dashboard</button>
+            <button class="nav-tab" onclick="switchTab('requests')">Verifications <span id="reqCount" class="badge-count">0</span></button>
+            <button class="nav-tab" onclick="switchTab('audit')">Audit Logs</button>
+        </nav>
+
+        <main class="main-grid" id="mainContent">
+            
+            <!-- VIEW: DASHBOARD -->
+            <div id="view-dashboard" class="tab-view active">
+                <!-- Registration / Identity Card -->
+                <section class="card fade-in" id="cardRegistration">
+                    <h2><span>📝</span> Identity Management</h2>
+                    <div id="formRegister">
+                        <div class="form-group">
+                            <label>FULL NAME</label>
+                            <input type="text" id="regName" placeholder="John Doe">
+                        </div>
+                        <div class="form-group">
+                            <label>DATE OF BIRTH</label>
+                            <input type="date" id="regDob">
+                        </div>
+                        <div class="form-group">
+                            <label>EMAIL</label>
+                            <input type="email" id="regEmail" placeholder="john@example.com">
+                        </div>
+                        <div class="form-group">
+                            <label>GOV ID NUMBER (HASHED)</label>
+                            <input type="text" id="regGovId" placeholder="Gov ID">
+                        </div>
+                        <button id="btnRegister" class="btn-primary">Create On-Chain Identity</button>
+                    </div>
+
+                    <div id="identityDisplay" style="display:none;">
+                        <div class="identity-card-glass">
+                            <div class="card-header">
+                                <span class="card-label">DECENTRALIZED IDENTITY CARD</span>
+                                <span class="status-active">ACTIVE</span>
+                            </div>
+                            <div class="card-body">
+                                <h3 id="displayName">User Name</h3>
+                                <p id="displayDid" class="mono-text">did:eth:0x...</p>
+                                <div class="qr-container" id="qrCode"></div>
+                            </div>
+                            <div class="card-footer">
+                                <span>Issued: <b id="displayDate">...</b></span>
+                                <div>
+                                    <button class="btn-sm" onclick="copyDid()">Copy DID</button>
+                                </div>
+                            </div>
+                        </div>
+                        <button id="btnRevoke" class="btn-danger-outline" style="width:100%; margin-top:1rem;">Revoke Identity</button>
+                    </div>
+                </section>
+
+                <!-- Activity Feed -->
+                <section class="card fade-in">
+                    <h2><span>📊</span> Recent Activity</h2>
+                    <ul class="activity-list" id="activityList">
+                        <!-- Populated by JS -->
+                        <li class="empty-state">No recent activity</li>
+                    </ul>
+                </section>
+            </div>
+
+            <!-- VIEW: VERIFICATION REQUESTS -->
+            <div id="view-requests" class="tab-view">
+                <section class="card">
+                    <h2><span>🔐</span> Pending Requests</h2>
+                    <div id="requestsList" class="request-grid">
+                        <!-- Populated by JS -->
+                        <div class="empty-state">No pending verification requests.</div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- VIEW: AUDIT LOGS -->
+            <div id="view-audit" class="tab-view">
+                <section class="card full-width">
+                    <h2><span>📜</span> Immutable Audit Trail</h2>
+                    <div class="table-container">
+                        <table class="audit-table">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Action</th>
+                                    <th>DID / Entity</th>
+                                    <th>Transaction Hash</th>
+                                </tr>
+                            </thead>
+                            <tbody id="auditTableBody">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <button onclick="exportLogs()" class="btn-secondary" style="margin-top:1rem;">Export JSON</button>
+                </section>
+            </div>
+
+        </main>
+
+        <!-- Loading Overlay -->
+        <div id="loadingOverlay" class="overlay-hidden">
+            <div class="loader"></div>
+            <p id="loaderMessage">PROCESSING TRANSACTION...</p>
+            <div id="loaderControls" style="margin-top: 1rem; text-align: center; display: none;">
+                <p style="font-size: 0.8rem; color: #ef4444; margin-bottom: 0.5rem;">Taking too long?</p>
+                <button onclick="forceCloseLoader()" style="background: transparent; border: 1px solid white; color: white; padding: 5px 10px; border-radius: 5px; cursor: pointer;">Cancel / Close</button>
+                <p style="font-size: 0.7rem; color: #94a3b8; margin-top: 0.5rem; max-width: 300px;">
+                    If using Localhost, try <b>MetaMask > Settings > Advanced > Clear Activity Tab Data</b> to reset nonces.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
