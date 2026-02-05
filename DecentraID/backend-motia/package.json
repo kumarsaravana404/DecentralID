@@ -1,0 +1,33 @@
+{
+  "name": "decentraid-backend-motia",
+  "version": "1.0.0",
+  "description": "DecentraID Production Backend powered by Motia",
+  "type": "module",
+  "scripts": {
+    "postinstall": "motia install",
+    "dev": "motia dev",
+    "start": "motia start",
+    "generate-types": "motia generate-types",
+    "build": "motia build",
+    "clean": "rm -rf dist node_modules python_modules .motia .mermaid"
+  },
+  "dependencies": {
+    "motia": "^0.17.14-beta.196",
+    "mongoose": "^8.1.0",
+    "dotenv": "^17.2.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0",
+    "tsx": "^4.7.0"
+  },
+  "keywords": [
+    "motia",
+    "blockchain",
+    "identity",
+    "ssi",
+    "decentralized"
+  ],
+  "author": "",
+  "license": "MIT"
+}

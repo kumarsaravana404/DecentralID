@@ -1,5 +1,5 @@
 services:
-  # BACKEND SERVICE
+  # BACKEND SERVICE - Motia Powered
   - type: web
     name: decentraid-backend
     env: node
@@ -7,8 +7,8 @@ services:
     plan: free
     repo: https://github.com/kumarsaravana404/DecentralID
     branch: main
-    rootDir: DecentraID/backend
-    buildCommand: npm install
+    rootDir: DecentraID/backend-motia
+    buildCommand: npm install && npm run build
     startCommand: npm start
     envVars:
       - key: NODE_ENV
@@ -21,3 +21,5 @@ services:
         sync: false # You must enter this in Render Dashboard (32 chars)
       - key: CORS_ORIGIN
         sync: false # Enter your Frontend URL (e.g. https://decentral-id.vercel.app)
+      - key: FRONTEND_URL
+        sync: false # Same as CORS_ORIGIN for shareable links
