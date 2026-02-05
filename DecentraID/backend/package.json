@@ -12,7 +12,8 @@
     "dev": "NODE_ENV=development nodemon server.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "lint": "eslint .",
-    "health": "curl -f http://localhost:${PORT:-5000}/health || exit 1"
+    "health": "curl -f http://localhost:${PORT:-5000}/health || exit 1",
+    "check-deploy": "node check-deployment.js"
   },
   "keywords": [
     "blockchain",
