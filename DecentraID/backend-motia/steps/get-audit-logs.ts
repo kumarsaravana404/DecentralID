@@ -1,4 +1,4 @@
-import type { ApiRouteConfig, Handlers } from 'motia';
+import type { ApiRouteConfig } from 'motia';
 import { AuditLog } from '../src/models/AuditLog.js';
 
 export const config: ApiRouteConfig = {
@@ -10,7 +10,7 @@ export const config: ApiRouteConfig = {
   description: 'Retrieve audit logs with optional DID filtering'
 };
 
-export const handler: Handlers['api'] = async (req, { logger }) => {
+export const handler = async (req: any, { logger }: any) => {
   try {
     const { did } = req.query;
     

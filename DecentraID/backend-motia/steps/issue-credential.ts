@@ -1,4 +1,4 @@
-import type { ApiRouteConfig, Handlers } from 'motia';
+import type { ApiRouteConfig } from 'motia';
 import crypto from 'crypto';
 import { encrypt } from '../src/utils/encryption.js';
 import { uploadToIPFS } from '../src/utils/ipfs.js';
@@ -13,7 +13,7 @@ export const config: ApiRouteConfig = {
   description: 'Issue a verifiable credential to a user'
 };
 
-export const handler: Handlers['api'] = async (req, { logger }) => {
+export const handler = async (req: any, { logger }: any) => {
   const { issuerDid, holderDid, credentialType, data } = req.body;
 
   if (!issuerDid || !holderDid || !credentialType || !data) {

@@ -1,4 +1,4 @@
-import type { ApiRouteConfig, Handlers } from 'motia';
+import type { ApiRouteConfig } from 'motia';
 import crypto from 'crypto';
 import { encrypt } from '../src/utils/encryption.js';
 import { uploadToIPFS } from '../src/utils/ipfs.js';
@@ -14,7 +14,7 @@ export const config: ApiRouteConfig = {
   description: 'Create identity without blockchain transaction (gasless)'
 };
 
-export const handler: Handlers['api'] = async (req, { logger }) => {
+export const handler = async (req: any, { logger }: any) => {
   const { did, personalData } = req.body;
 
   if (!did || !personalData) {

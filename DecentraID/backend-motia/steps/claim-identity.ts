@@ -1,4 +1,4 @@
-import type { ApiRouteConfig, Handlers } from 'motia';
+import type { ApiRouteConfig } from 'motia';
 import { logAudit } from '../src/utils/audit.js';
 import { GaslessIdentity } from '../src/models/GaslessIdentity.js';
 
@@ -11,7 +11,7 @@ export const config: ApiRouteConfig = {
   description: 'Claim and anchor a gasless identity on-chain'
 };
 
-export const handler: Handlers['api'] = async (req, { logger }) => {
+export const handler = async (req: any, { logger }: any) => {
   const { shareHash, claimantWallet, txHash } = req.body;
 
   if (!shareHash || !claimantWallet) {

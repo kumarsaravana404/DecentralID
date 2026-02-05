@@ -1,4 +1,4 @@
-import type { ApiRouteConfig, Handlers } from 'motia';
+import type { ApiRouteConfig } from 'motia';
 import crypto from 'crypto';
 import { logAudit } from '../src/utils/audit.js';
 import { VerificationRequest } from '../src/models/VerificationRequest.js';
@@ -12,7 +12,7 @@ export const config: ApiRouteConfig = {
   description: 'Create a verification request from verifier to user'
 };
 
-export const handler: Handlers['api'] = async (req, { logger }) => {
+export const handler = async (req: any, { logger }: any) => {
   const { verifierDid, userDid, purpose } = req.body;
 
   if (!verifierDid || !userDid || !purpose) {

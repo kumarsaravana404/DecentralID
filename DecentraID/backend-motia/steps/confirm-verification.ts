@@ -1,4 +1,4 @@
-import type { ApiRouteConfig, Handlers } from 'motia';
+import type { ApiRouteConfig } from 'motia';
 import { decrypt } from '../src/utils/encryption.js';
 import { logAudit } from '../src/utils/audit.js';
 import { VerificationRequest } from '../src/models/VerificationRequest.js';
@@ -12,7 +12,7 @@ export const config: ApiRouteConfig = {
   description: 'User confirms verification with selective disclosure'
 };
 
-export const handler: Handlers['api'] = async (req, { logger }) => {
+export const handler = async (req: any, { logger }: any) => {
   const { requestId, userDid, encryptedPayload } = req.body;
 
   if (!requestId || !userDid || !encryptedPayload) {

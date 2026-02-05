@@ -1,4 +1,4 @@
-import type { ApiRouteConfig, Handlers } from 'motia';
+import type { ApiRouteConfig } from 'motia';
 
 export const config: ApiRouteConfig = {
   type: 'api',
@@ -8,7 +8,7 @@ export const config: ApiRouteConfig = {
   emits: []
 };
 
-export const handler: Handlers['api'] = async (req, { logger }) => {
+export const handler = async (req: any, { logger }: any) => {
   return {
     status: 200,
     body: {

@@ -1,4 +1,4 @@
-import type { ApiRouteConfig, Handlers } from 'motia';
+import type { ApiRouteConfig } from 'motia';
 import { encrypt } from '../src/utils/encryption.js';
 import { uploadToIPFS } from '../src/utils/ipfs.js';
 import { logAudit } from '../src/utils/audit.js';
@@ -12,7 +12,7 @@ export const config: ApiRouteConfig = {
   description: 'Create a new encrypted identity and upload to IPFS'
 };
 
-export const handler: Handlers['api'] = async (req, { logger }) => {
+export const handler = async (req: any, { logger }: any) => {
   const { did, personalData } = req.body;
 
   if (!did || !personalData) {

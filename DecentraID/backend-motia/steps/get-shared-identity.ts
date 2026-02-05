@@ -1,4 +1,4 @@
-import type { ApiRouteConfig, Handlers } from 'motia';
+import type { ApiRouteConfig } from 'motia';
 import { decrypt } from '../src/utils/encryption.js';
 import { GaslessIdentity } from '../src/models/GaslessIdentity.js';
 
@@ -11,7 +11,7 @@ export const config: ApiRouteConfig = {
   description: 'Retrieve identity details by shareable hash'
 };
 
-export const handler: Handlers['api'] = async (req, { logger }) => {
+export const handler = async (req: any, { logger }: any) => {
   const { shareHash } = req.params;
 
   if (!shareHash) {
