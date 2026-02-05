@@ -42,22 +42,22 @@ export default function App() {
   const [regData, setRegData] = useState({ name: '', dob: '', email: '', govId: '' });
 
   // Gasless Identity State
-  const [gaslessMode, setGaslessMode] = useState(false);
   const [shareableLink, setShareableLink] = useState('');
   const [importHash, setImportHash] = useState('');
 
   useEffect(() => {
     init();
-  }, []);
+    if (shareableLink) console.log("New link generated:", shareableLink);
+  }, [shareableLink]);
 
   const init = async () => {
     if (typeof window.ethereum !== 'undefined') {
       try {
-        const provider = new ethers.providers.Web3Provider(window.ethereum);
+        const provider = new ethers.BrowserProvider(window.ethereum);
         const res = await fetch(`${API_URL}/config`);
         const config = await res.json();
         
-        const signer = provider.getSigner();
+        const signer = await provider.getSigner();
         const IdentityRegistryABI = [
           "function registerIdentity(address user, string ipfsHash) external",
           "function getIdentity(address user) external view returns (string, bool, uint256, uint256)",
@@ -77,8 +77,9 @@ export default function App() {
 
         const accounts = await provider.listAccounts();
         if (accounts.length > 0) {
-          setWallet(accounts[0]);
-          fetchBalance(accounts[0]);
+          const address = accounts[0].address;
+          setWallet(address);
+          fetchBalance(address);
         }
       } catch (e) {
         console.error("Initialization failed", e);
@@ -95,9 +96,9 @@ export default function App() {
 
   const fetchBalance = async (address: string) => {
     if (typeof window.ethereum !== 'undefined') {
-      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const provider = new ethers.BrowserProvider(window.ethereum);
       const balanceBig = await provider.getBalance(address);
-      const balanceEth = ethers.utils.formatEther(balanceBig);
+      const balanceEth = ethers.formatEther(balanceBig);
       setBalance(parseFloat(balanceEth).toFixed(4));
     }
   };
@@ -224,7 +225,7 @@ export default function App() {
         throw new Error(errData.error || "Backend failed");
       }
 
-      const { shareableLink: link, shareHash } = await res.json();
+      const { shareableLink: link } = await res.json();
       setShareableLink(link);
       alert(`✅ Identity created! \n\nShareable Link:\n${link}\n\nShare this link to transfer ownership to another wallet.`);
       
