@@ -37,22 +37,26 @@ node -e "console.log(require('crypto').randomBytes(16).toString('hex'))"
 1. Go to [Render.com](https://render.com) → Sign in → "New +" → "Blueprint".
 2. Connect repo: `kumarsaravana404/DecentralID`.
 3. Render detects `render.yaml`. Add environment variables:
+
    ```env
    MONGODB_URI=mongodb+srv://kumarsaravana34888_db_user:saravana%400408@watchtower.yuvlto5.mongodb.net/decentraid?appName=WatchTower
    ENCRYPTION_KEY=<your generated 32-char key>
    CORS_ORIGIN=https://your-frontend.vercel.app
    FRONTEND_URL=https://your-frontend.vercel.app
    ```
+
 4. Click "Apply". Wait 3-5 mins. Copy backend URL.
 
 ### 3. Frontend Deployment (Vercel) - 3 minutes
 
 1. Run locally:
+
    ```bash
    cd DecentraID/web
    npx vercel login
    npx vercel --prod
    ```
+
 2. Add environment variable in Vercel dashboard:
    - `VITE_API_URL`: `https://YOUR-SERVICE.onrender.com`
 3. Redeploy: `npx vercel --prod`. Copy frontend URL.
@@ -85,26 +89,12 @@ Update `CORS_ORIGIN` and `FRONTEND_URL` in Render with your actual Vercel URL.
 
 ## 🏗 System Architecture
 
-```
-┌──────────────────┐
-│   Users          │
-│   (Browsers)     │
-└────────┬─────────┘
-         │ HTTPS
-         ▼
-┌──────────────────┐         ┌──────────────────┐
-│   Vercel         │         │   Render.com     │
-│   (Frontend)     │◄────────┤   (Backend API)  │
-│   React + Vite   │  API    │   Express        │
-└──────────────────┘         └────────┬─────────┘
-                                      │
-                             ┌────────┴─────────┐
-                             ▼                  ▼
-                      ┌─────────────┐    ┌──────────────┐
-                      │  MongoDB    │    │  Sepolia     │
-                      │  Atlas      │    │  Testnet     │
-                      │  (Database) │    │  (Blockchain)│
-                      └─────────────┘    └──────────────┘
+```mermaid
+graph TD
+    User[Users (Browsers)] -->|HTTPS| Frontend[Vercel (Frontend)]
+    Frontend -->|API| Backend[Render.com (Backend API)]
+    Backend -->|Database| DB[MongoDB Atlas]
+    Backend -->|Blockchain| Sepolia[Sepolia Testnet]
 ```
 
 ---
@@ -147,20 +137,22 @@ npm run check-deploy
 ### Environment Variables
 
 **Backend (.env)**
-| Variable | Description |
-|----------|-------------|
-| `MONGODB_URI` | MongoDB connection string |
-| `ENCRYPTION_KEY` | 32-char hex string |
-| `CORS_ORIGIN` | Frontend URL |
-| `FRONTEND_URL` | Frontend URL |
-| `NODE_ENV` | `production` |
-| `PORT` | `5000` |
+
+| Variable         | Description               |
+| :--------------- | :------------------------ |
+| `MONGODB_URI`    | MongoDB connection string |
+| `ENCRYPTION_KEY` | 32-char hex string        |
+| `CORS_ORIGIN`    | Frontend URL              |
+| `FRONTEND_URL`   | Frontend URL              |
+| `NODE_ENV`       | `production`              |
+| `PORT`           | `5000`                    |
 
 **Frontend (.env)**
-| Variable | Description |
-|----------|-------------|
+
+| Variable       | Description         |
+| :------------- | :------------------ |
 | `VITE_API_URL` | Boolean backend URL |
-| `VITE_NETWORK` | `sepolia` |
+| `VITE_NETWORK` | `sepolia`           |
 
 ### Manual Deployment Steps
 
