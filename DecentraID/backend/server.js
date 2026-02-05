@@ -3,14 +3,26 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const crypto = require('crypto');
 const fs = require('fs');
+const path = require('path');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const compression = require('compression');
 const { body, validationResult } = require('express-validator');
 const mongoose = require('mongoose');
 const winston = require('winston');
 
 // Load environment variables
 dotenv.config();
+
+// Validate required environment variables in production
+const requiredEnvVars = ['MONGODB_URI', 'ENCRYPTION_KEY'];
+if (process.env.NODE_ENV === 'production') {
+    const missing = requiredEnvVars.filter(v => !process.env[v]);
+    if (missing.length > 0) {
+        console.error(`Missing required environment variables: ${missing.join(', ')}`);
+        process.exit(1);
+    }
+}
 
 // Import models
 const AuditLog = require('./models/AuditLog');
@@ -20,40 +32,82 @@ const GaslessIdentity = require('./models/GaslessIdentity');
 // ==========================================
 // LOGGER CONFIGURATION (Winston)
 // ==========================================
+
+// Ensure logs directory exists
+const logsDir = path.join(__dirname, 'logs');
+if (!fs.existsSync(logsDir)) {
+    fs.mkdirSync(logsDir, { recursive: true });
+}
+
+const logFormat = winston.format.combine(
+    winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+    winston.format.errors({ stack: true }),
+    winston.format.json()
+);
+
 const logger = winston.createLogger({
     level: process.env.LOG_LEVEL || 'info',
-    format: winston.format.combine(
-        winston.format.timestamp(),
-        winston.format.errors({ stack: true }),
-        winston.format.json()
-    ),
-    defaultMeta: { service: 'decentraid-backend' },
+    format: logFormat,
+    defaultMeta: { 
+        service: 'decentraid-backend',
+        environment: process.env.NODE_ENV || 'development'
+    },
     transports: [
-        new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
-        new winston.transports.File({ filename: 'logs/combined.log' }),
+        new winston.transports.File({ 
+            filename: path.join(logsDir, 'error.log'), 
+            level: 'error',
+            maxsize: 5242880, // 5MB
+            maxFiles: 5
+        }),
+        new winston.transports.File({ 
+            filename: path.join(logsDir, 'combined.log'),
+            maxsize: 5242880, // 5MB
+            maxFiles: 5
+        }),
     ],
 });
 
-// If we're not in production, verify logging to console
-if (process.env.NODE_ENV !== 'production') {
-    logger.add(new winston.transports.Console({
-        format: winston.format.combine(
+// Always log to console (for container environments like Docker/Render)
+logger.add(new winston.transports.Console({
+    format: process.env.NODE_ENV === 'production'
+        ? logFormat
+        : winston.format.combine(
             winston.format.colorize(),
             winston.format.simple()
         ),
-    }));
-}
+}));
 
 const app = express();
+
+// Trust proxy for proper IP detection behind reverse proxies (Render, Heroku, etc.)
+if (process.env.NODE_ENV === 'production') {
+    app.set('trust proxy', 1);
+}
 
 // ==========================================
 // SECURITY MIDDLEWARE
 // ==========================================
 
+// Compression for responses
+app.use(compression());
+
 // Security headers
 app.use(helmet({
-    contentSecurityPolicy: false, // Allow inline scripts for blockchain interactions
-    crossOriginEmbedderPolicy: false
+    contentSecurityPolicy: process.env.NODE_ENV === 'production' ? {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", "'unsafe-inline'"],
+            styleSrc: ["'self'", "'unsafe-inline'"],
+            imgSrc: ["'self'", 'data:', 'https:'],
+            connectSrc: ["'self'", 'https:'],
+        }
+    } : false,
+    crossOriginEmbedderPolicy: false,
+    hsts: process.env.NODE_ENV === 'production' ? {
+        maxAge: 31536000,
+        includeSubDomains: true,
+        preload: true
+    } : false
 }));
 
 // CORS Configuration
@@ -78,26 +132,52 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
-// Rate limiting
+// Rate limiting - General API
 const limiter = rateLimit({
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-    limit: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // Changed 'max' to 'limit' for newer versions
+    limit: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
     message: { error: 'Too many requests from this IP, please try again later.' },
-    standardHeaders: true,
+    standardHeaders: 'draft-7',
     legacyHeaders: false,
+    skip: (req) => req.path === '/health' || req.path === '/ready', // Skip health checks
     handler: (req, res, next, options) => {
-        logger.warn(`Rate limit exceeded for IP: ${req.ip}`);
+        logger.warn(`Rate limit exceeded for IP: ${req.ip}`, { path: req.path });
         res.status(options.statusCode).send(options.message);
-    }
+    },
+    keyGenerator: (req) => req.ip || req.headers['x-forwarded-for'] || 'unknown'
 });
 app.use(limiter);
 
-// Body parser
-app.use(express.json({ limit: '10mb' }));
+// Stricter rate limiting for sensitive endpoints
+const strictLimiter = rateLimit({
+    windowMs: 60 * 1000, // 1 minute
+    limit: 10,
+    message: { error: 'Too many requests to this endpoint, please slow down.' },
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    keyGenerator: (req) => req.ip || req.headers['x-forwarded-for'] || 'unknown'
+});
 
-// Request Logger Middleware
+// Body parser with size limits
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+
+// Request Logger Middleware with response time tracking
 app.use((req, res, next) => {
-    logger.info(`${req.method} ${req.originalUrl} - IP: ${req.ip}`);
+    const startTime = Date.now();
+    
+    // Log after response is sent
+    res.on('finish', () => {
+        const duration = Date.now() - startTime;
+        const logLevel = res.statusCode >= 400 ? 'warn' : 'info';
+        logger[logLevel](`${req.method} ${req.originalUrl}`, {
+            ip: req.ip,
+            statusCode: res.statusCode,
+            duration: `${duration}ms`,
+            userAgent: req.get('user-agent')
+        });
+    });
+    
     next();
 });
 
@@ -107,12 +187,23 @@ app.use((req, res, next) => {
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/decentraid';
 
+const mongooseOptions = {
+    maxPoolSize: parseInt(process.env.MONGODB_POOL_SIZE) || 10,
+    serverSelectionTimeoutMS: 5000,
+    socketTimeoutMS: 45000,
+    retryWrites: true,
+    w: 'majority'
+};
+
 const connectDB = async () => {
     try {
-        await mongoose.connect(MONGODB_URI);
-        logger.info('✅ MongoDB Connected');
+        await mongoose.connect(MONGODB_URI, mongooseOptions);
+        logger.info('✅ MongoDB Connected', { 
+            host: mongoose.connection.host,
+            name: mongoose.connection.name 
+        });
     } catch (err) {
-        logger.error('❌ MongoDB Connection Error:', err);
+        logger.error('❌ MongoDB Connection Error:', err.message);
         if (process.env.NODE_ENV === 'production') {
             logger.error('Cannot start without database in production mode');
             process.exit(1);
@@ -121,8 +212,15 @@ const connectDB = async () => {
 };
 connectDB();
 
-mongoose.connection.on('error', err => logger.error('MongoDB Runtime Error:', err));
-mongoose.connection.on('disconnected', () => logger.warn('MongoDB Disconnected'));
+mongoose.connection.on('error', err => logger.error('MongoDB Runtime Error:', err.message));
+mongoose.connection.on('disconnected', () => {
+    logger.warn('MongoDB Disconnected');
+    // Attempt reconnection in production
+    if (process.env.NODE_ENV === 'production') {
+        setTimeout(connectDB, 5000);
+    }
+});
+mongoose.connection.on('reconnected', () => logger.info('MongoDB Reconnected'));
 
 // ==========================================
 // ENVIRONMENT VALIDATION
@@ -215,23 +313,37 @@ app.get('/health', (req, res) => {
     res.json({ 
         status: 'ok', 
         timestamp: new Date().toISOString(),
-        uptime: process.uptime()
+        uptime: Math.floor(process.uptime()),
+        version: process.env.npm_package_version || '1.0.0',
+        environment: process.env.NODE_ENV || 'development'
     });
 });
 
 app.get('/ready', async (req, res) => {
     try {
+        const dbState = mongoose.connection.readyState;
+        const dbStates = { 0: 'disconnected', 1: 'connected', 2: 'connecting', 3: 'disconnecting' };
+        
+        if (dbState !== 1) {
+            throw new Error(`Database ${dbStates[dbState] || 'unknown'}`);
+        }
+        
         await mongoose.connection.db.admin().ping();
         res.json({ 
             status: 'ready', 
             database: 'connected',
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            checks: {
+                database: 'healthy',
+                memory: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`
+            }
         });
     } catch (error) {
         res.status(503).json({ 
             status: 'not ready', 
             database: 'disconnected',
-            error: error.message 
+            error: error.message,
+            timestamp: new Date().toISOString()
         });
     }
 });
@@ -390,7 +502,7 @@ app.post('/credential/verify-zkp', [
  * POST /verify/request
  * Verifier backend requests a verification.
  */
-app.post('/verify/request', [
+app.post('/verify/request', strictLimiter, [
     body('verifierDid').isString().notEmpty(),
     body('userDid').isString().notEmpty(),
     body('purpose').isString().notEmpty(),
@@ -535,7 +647,7 @@ app.get('/config', (req, res) => {
  * Create identity WITHOUT blockchain transaction (no gas needed)
  * Returns shareable hash link
  */
-app.post('/identity/create-gasless', [
+app.post('/identity/create-gasless', strictLimiter, [
     body('did').isString().notEmpty().withMessage('DID is required'),
     body('personalData').isObject().withMessage('Personal data must be an object'),
     body('personalData.name').optional().isString(),
@@ -704,23 +816,43 @@ app.use((err, req, res, next) => {
 // SERVER START
 // ==========================================
 
-const server = app.listen(PORT, () => {
-    logger.info(`\n🚀 DecentraID Services running on port ${PORT}`);
+const server = app.listen(PORT, '0.0.0.0', () => {
+    logger.info(`🚀 DecentraID Services running on port ${PORT}`);
     logger.info(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
     logger.info(`🔐 Security: Enabled`);
     logger.info(`📝 Services: Identity, Verification, Audit active`);
 });
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
-    logger.info('SIGTERM received, shutting down gracefully...');
-    server.close(() => {
-        mongoose.connection.close(false, () => {
-            logger.info('Server and database connections closed');
+// Set server timeouts for production
+server.keepAliveTimeout = 65000; // Slightly higher than ALB's 60s
+server.headersTimeout = 66000;
+
+// Graceful shutdown handler
+const gracefulShutdown = (signal) => {
+    logger.info(`${signal} received, shutting down gracefully...`);
+    
+    server.close(async () => {
+        logger.info('HTTP server closed');
+        
+        try {
+            await mongoose.connection.close();
+            logger.info('Database connection closed');
             process.exit(0);
-        });
+        } catch (err) {
+            logger.error('Error during shutdown:', err);
+            process.exit(1);
+        }
     });
-});
+    
+    // Force shutdown after 30 seconds
+    setTimeout(() => {
+        logger.error('Forced shutdown after timeout');
+        process.exit(1);
+    }, 30000);
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (reason, promise) => {

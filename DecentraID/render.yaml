@@ -1,25 +1,37 @@
+# DecentraID Backend - Render Deployment Configuration
+# This file configures automatic deployment to Render.com
+
 services:
-  # BACKEND SERVICE - Motia Powered
+  # BACKEND SERVICE
   - type: web
     name: decentraid-backend
     env: node
-    region: singapore # or ohio, frankfurt, etc.
+    region: singapore
     plan: free
     repo: https://github.com/kumarsaravana404/DecentralID
     branch: main
-    rootDir: DecentraID/backend-motia
-    buildCommand: npm install && npm run build
+    rootDir: DecentraID/backend
+    buildCommand: npm install
     startCommand: npm start
+    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
-        value: 10000
+        value: 5000
       - key: MONGODB_URI
-        sync: false # You must enter this in Render Dashboard
+        sync: false
       - key: ENCRYPTION_KEY
-        sync: false # You must enter this in Render Dashboard (32 chars)
+        sync: false
       - key: CORS_ORIGIN
-        sync: false # Enter your Frontend URL (e.g. https://decentral-id.vercel.app)
+        sync: false
       - key: FRONTEND_URL
-        sync: false # Same as CORS_ORIGIN for shareable links
+        sync: false
+      - key: RATE_LIMIT_WINDOW_MS
+        value: 900000
+      - key: RATE_LIMIT_MAX_REQUESTS
+        value: 100
+      - key: LOG_LEVEL
+        value: info
+      - key: MONGODB_POOL_SIZE
+        value: 10
