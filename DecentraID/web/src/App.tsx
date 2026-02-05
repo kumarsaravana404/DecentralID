@@ -36,6 +36,8 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [contracts, setContracts] = useState<any>(null);
 
+  const [balance, setBalance] = useState<string>('0');
+  
   // Form State
   const [regData, setRegData] = useState({ name: '', dob: '', email: '', govId: '' });
 
@@ -71,6 +73,7 @@ export default function App() {
         const accounts = await provider.listAccounts();
         if (accounts.length > 0) {
           setWallet(accounts[0]);
+          fetchBalance(accounts[0]);
         }
       } catch (e) {
         console.error("Initialization failed", e);
@@ -85,10 +88,28 @@ export default function App() {
     }
   }, [wallet, contracts]);
 
+  const fetchBalance = async (address: string) => {
+    if (typeof window.ethereum !== 'undefined') {
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const balanceBig = await provider.getBalance(address);
+      const balanceEth = ethers.utils.formatEther(balanceBig);
+      setBalance(parseFloat(balanceEth).toFixed(4));
+    }
+  };
+
   const connectWallet = async () => {
     if (typeof window.ethereum !== 'undefined') {
-      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-      setWallet(accounts[0]);
+      try {
+        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+        setWallet(accounts[0]);
+        await fetchBalance(accounts[0]);
+      } catch (error) {
+        console.error("Connection failed:", error);
+        alert("Failed to connect wallet. See console for details.");
+      }
+    } else {
+      console.error("No wallet found");
+      alert("No Ethereum wallet found! Please install MetaMask.");
     }
   };
 
@@ -129,10 +150,16 @@ export default function App() {
   };
 
   const handleRegister = async () => {
-    if (!regData.name || !regData.email) return;
+    console.log("Starting registration with data:", regData);
+    if (!regData.name || !regData.email) {
+      alert("Please fill in Name and Email!");
+      return;
+    }
+    
     setLoading(true);
     try {
       // 1. Backend Encryption
+      console.log("Sending data to backend...");
       const res = await fetch(`${API_URL}/identity/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -141,11 +168,26 @@ export default function App() {
           personalData: regData
         })
       });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || "Backend failed");
+      }
+
       const { ipfsHash } = await res.json();
+      console.log("Received IPFS Hash:", ipfsHash);
 
       // 2. Blockchain Tx
+      if (!contracts || !contracts.identity) {
+        throw new Error("Smart contracts not initialized");
+      }
+
+      console.log("Sending transaction to blockchain...");
       const tx = await contracts.identity.registerIdentity(wallet, ipfsHash);
+      console.log("Transaction sent:", tx.hash);
+      
       await tx.wait();
+      console.log("Transaction confirmed!");
       
       await loadData();
       setLoading(false);
@@ -200,9 +242,14 @@ export default function App() {
 
         <div className="flex items-center gap-4">
           {wallet ? (
-            <div className="glass px-4 py-2 rounded-full border border-primary/20 flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-              <span className="text-xs font-mono">{wallet.slice(0,6)}...{wallet.slice(-4)}</span>
+            <div className="glass px-4 py-2 rounded-full border border-primary/20 flex items-center gap-4">
+              <div className="flex items-center gap-2 border-r border-white/10 pr-3">
+                <span className="text-xs font-bold text-primary">{balance} ETH</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                <span className="text-xs font-mono">{wallet.slice(0,6)}...{wallet.slice(-4)}</span>
+              </div>
             </div>
           ) : (
             <button 

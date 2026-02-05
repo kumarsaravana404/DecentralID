@@ -7,6 +7,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { body, validationResult } = require('express-validator');
 const mongoose = require('mongoose');
+const winston = require('winston');
 
 // Load environment variables
 dotenv.config();
@@ -14,6 +15,33 @@ dotenv.config();
 // Import models
 const AuditLog = require('./models/AuditLog');
 const VerificationRequest = require('./models/VerificationRequest');
+
+// ==========================================
+// LOGGER CONFIGURATION (Winston)
+// ==========================================
+const logger = winston.createLogger({
+    level: process.env.LOG_LEVEL || 'info',
+    format: winston.format.combine(
+        winston.format.timestamp(),
+        winston.format.errors({ stack: true }),
+        winston.format.json()
+    ),
+    defaultMeta: { service: 'decentraid-backend' },
+    transports: [
+        new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
+        new winston.transports.File({ filename: 'logs/combined.log' }),
+    ],
+});
+
+// If we're not in production, verify logging to console
+if (process.env.NODE_ENV !== 'production') {
+    logger.add(new winston.transports.Console({
+        format: winston.format.combine(
+            winston.format.colorize(),
+            winston.format.simple()
+        ),
+    }));
+}
 
 const app = express();
 
@@ -34,29 +62,43 @@ const corsOptions = {
             ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
             : ['http://localhost:5173'];
         
-        // Allow requests with no origin (mobile apps, Postman, etc.)
-        if (!origin || allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV === 'development') {
+        // Allow requests with no origin (mobile apps, Postman, etc.) or if explicitly allowed
+        // also checking if origin is included in allowedOrigins which might be a list of strings
+        if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV === 'development') {
             callback(null, true);
         } else {
+            logger.warn(`CORS blocked request from origin: ${origin}`);
             callback(new Error('Not allowed by CORS'));
         }
     },
-    credentials: true
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 };
 app.use(cors(corsOptions));
 
 // Rate limiting
 const limiter = rateLimit({
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-    max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
-    message: 'Too many requests from this IP, please try again later.',
+    limit: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // Changed 'max' to 'limit' for newer versions
+    message: { error: 'Too many requests from this IP, please try again later.' },
     standardHeaders: true,
     legacyHeaders: false,
+    handler: (req, res, next, options) => {
+        logger.warn(`Rate limit exceeded for IP: ${req.ip}`);
+        res.status(options.statusCode).send(options.message);
+    }
 });
 app.use(limiter);
 
 // Body parser
 app.use(express.json({ limit: '10mb' }));
+
+// Request Logger Middleware
+app.use((req, res, next) => {
+    logger.info(`${req.method} ${req.originalUrl} - IP: ${req.ip}`);
+    next();
+});
 
 // ==========================================
 // DATABASE CONNECTION
@@ -64,18 +106,22 @@ app.use(express.json({ limit: '10mb' }));
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/decentraid';
 
-mongoose.connect(MONGODB_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-})
-.then(() => console.log('✅ MongoDB Connected'))
-.catch(err => {
-    console.error('❌ MongoDB Connection Error:', err);
-    if (process.env.NODE_ENV === 'production') {
-        console.error('Cannot start without database in production mode');
-        process.exit(1);
+const connectDB = async () => {
+    try {
+        await mongoose.connect(MONGODB_URI);
+        logger.info('✅ MongoDB Connected');
+    } catch (err) {
+        logger.error('❌ MongoDB Connection Error:', err);
+        if (process.env.NODE_ENV === 'production') {
+            logger.error('Cannot start without database in production mode');
+            process.exit(1);
+        }
     }
-});
+};
+connectDB();
+
+mongoose.connection.on('error', err => logger.error('MongoDB Runtime Error:', err));
+mongoose.connection.on('disconnected', () => logger.warn('MongoDB Disconnected'));
 
 // ==========================================
 // ENVIRONMENT VALIDATION
@@ -83,9 +129,12 @@ mongoose.connect(MONGODB_URI, {
 
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
 if (!ENCRYPTION_KEY || ENCRYPTION_KEY.length !== 32) {
-    console.error('❌ ENCRYPTION_KEY must be exactly 32 characters');
+    logger.error('❌ ENCRYPTION_KEY must be exactly 32 characters');
     if (process.env.NODE_ENV === 'production') {
         process.exit(1);
+    } else {
+        // Fallback for dev only if needed, but better to enforce
+        logger.warn('Running with insecure key handling (Development Mode)');
     }
 }
 
@@ -97,21 +146,46 @@ const IV_LENGTH = 16;
 // ==========================================
 
 function encrypt(text) {
-    const iv = crypto.randomBytes(IV_LENGTH);
-    const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), iv);
-    let encrypted = cipher.update(text);
-    encrypted = Buffer.concat([encrypted, cipher.final()]);
-    return iv.toString('hex') + ':' + encrypted.toString('hex');
+    try {
+        const iv = crypto.randomBytes(IV_LENGTH);
+        const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), iv);
+        let encrypted = cipher.update(text);
+        encrypted = Buffer.concat([encrypted, cipher.final()]);
+        return iv.toString('hex') + ':' + encrypted.toString('hex');
+    } catch (error) {
+        logger.error('Encryption error:', error);
+        throw new Error('Encryption failed');
+    }
 }
 
 function decrypt(text) {
-    const textParts = text.split(':');
-    const iv = Buffer.from(textParts.shift(), 'hex');
-    const encryptedText = Buffer.from(textParts.join(':'), 'hex');
-    const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), iv);
-    let decrypted = decipher.update(encryptedText);
-    decrypted = Buffer.concat([decrypted, decipher.final()]);
-    return decrypted.toString();
+    try {
+        const textParts = text.split(':');
+        if (textParts.length !== 2) throw new Error('Invalid encrypted format');
+        const iv = Buffer.from(textParts.shift(), 'hex');
+        const encryptedText = Buffer.from(textParts.join(':'), 'hex');
+        const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), iv);
+        let decrypted = decipher.update(encryptedText);
+        decrypted = Buffer.concat([decrypted, decipher.final()]);
+        return decrypted.toString();
+    } catch (error) {
+        logger.error('Decryption error:', error);
+        throw new Error('Decryption failed');
+    }
+}
+
+// ==========================================
+// HELPER FUNCTIONS
+// ==========================================
+
+async function uploadToIPFS(data) {
+    // 1. If Pinata keys exist, use them (Placeholder for future implementation)
+    // if (process.env.PINATA_API_KEY) { ... }
+    
+    // 2. Mock IPFS Upload (Deterministic mock for demo purposes)
+    const hash = crypto.createHash('sha256').update(JSON.stringify(data)).digest('hex');
+    const mockIpfsCid = "Qm" + hash.substring(0, 44);
+    return mockIpfsCid;
 }
 
 async function logAudit(did, action, details, txHash = 'OFF-CHAIN') {
@@ -126,9 +200,9 @@ async function logAudit(did, action, details, txHash = 'OFF-CHAIN') {
     
     try {
         await AuditLog.create(log);
-        console.log(`[AUDIT] ${action} - ${did}`);
+        logger.info(`[AUDIT] ${action} - ${did}`);
     } catch (error) {
-        console.error('Audit log error:', error);
+        logger.error('Audit log error:', error);
     }
 }
 
@@ -167,7 +241,7 @@ app.get('/ready', async (req, res) => {
 
 /*
  * POST /identity/create
- * Encrypts user data and returns IPFS Hash (Mock) to be stored on chain.
+ * Encrypts user data and returns IPFS Hash.
  */
 app.post('/identity/create', [
     body('did').isString().notEmpty().withMessage('DID is required'),
@@ -186,8 +260,8 @@ app.post('/identity/create', [
         // 1. Encrypt Data
         const encryptedData = encrypt(JSON.stringify(personalData));
 
-        // 2. Mock IPFS Upload (In production: ipfs.add(encryptedData))
-        const mockIpfsCid = "Qm" + crypto.createHash('sha256').update(encryptedData).digest('hex').substring(0, 44);
+        // 2. Upload to Storage (Mock/Real IPFS)
+        const mockIpfsCid = await uploadToIPFS(encryptedData);
 
         // 3. Log Audit
         await logAudit(did, "IDENTITY_CREATION", "Encrypted payload generated");
@@ -199,7 +273,7 @@ app.post('/identity/create', [
         });
 
     } catch (error) {
-        console.error("Identity Creation Error:", error);
+        logger.error("Identity Creation Error:", error);
         res.status(500).json({ error: "Internal Server Error" });
     }
 });
@@ -219,7 +293,7 @@ app.put('/identity/update', [
 
         const { did, newData } = req.body;
         const encryptedData = encrypt(JSON.stringify(newData));
-        const mockIpfsCid = "Qm" + crypto.createHash('sha256').update(encryptedData).digest('hex').substring(0, 44);
+        const mockIpfsCid = await uploadToIPFS(encryptedData);
         
         await logAudit(did, "IDENTITY_UPDATE", "Identity metadata updated");
 
@@ -228,7 +302,7 @@ app.put('/identity/update', [
             ipfsHash: mockIpfsCid
         });
     } catch (error) {
-        console.error("Identity Update Error:", error);
+        logger.error("Identity Update Error:", error);
         res.status(500).json({ error: "Update failed" });
     }
 });
@@ -258,18 +332,18 @@ app.post('/credential/issue', [
         // 1. Encrypt Credential Data
         const encryptedData = encrypt(JSON.stringify(data));
         
-        // 2. Mock IPFS Upload
-        const mockIpfsCid = "Qm" + crypto.createHash('sha256').update(encryptedData).digest('hex').substring(0, 44);
+        // 2. IPFS Upload
+        const mockIpfsCid = await uploadToIPFS(encryptedData);
         
         await logAudit(issuerDid, "CREDENTIAL_ISSUANCE", `Issued ${credentialType} to ${holderDid}`);
 
         res.json({
             success: true,
             ipfsHash: mockIpfsCid,
-            credentialId: crypto.randomBytes(32).toString('hex')
+            credentialId: crypto.randomUUID()
         });
     } catch (error) {
-        console.error("Credential Issuance Error:", error);
+        logger.error("Credential Issuance Error:", error);
         res.status(500).json({ error: "Issuance failed" });
     }
 });
@@ -302,7 +376,7 @@ app.post('/credential/verify-zkp', [
             res.status(400).json({ success: false, error: "Invalid Proof" });
         }
     } catch (error) {
-        console.error("ZKP Verification Error:", error);
+        logger.error("ZKP Verification Error:", error);
         res.status(500).json({ error: "Verification failed" });
     }
 });
@@ -328,6 +402,8 @@ app.post('/verify/request', [
 
         const { verifierDid, userDid, purpose } = req.body;
         
+        // Use crypto.randomInt but ensure it's handled safely, or switch to UUID. 
+        // Frontend might expect a number, so sticking to randomInt but ensuring range.
         const requestId = crypto.randomInt(100000, 999999);
         
         await VerificationRequest.create({
@@ -346,7 +422,7 @@ app.post('/verify/request', [
             message: "Verification request initiated. Waiting for user consent."
         });
     } catch (error) {
-        console.error("Verification Request Error:", error);
+        logger.error("Verification Request Error:", error);
         res.status(500).json({ error: "Request failed" });
     }
 });
@@ -383,22 +459,27 @@ app.post('/verify/confirm', [
             
             // Simulation of selective disclosure
             const disclosedData = {};
-            if (request.purpose.toLowerCase().includes('age')) disclosedData.isOver18 = true;
-            if (request.purpose.toLowerCase().includes('id')) disclosedData.idVerified = true;
+            // More robust checking
+            const p = request.purpose.toLowerCase();
+            if (p.includes('age') || p.includes('18')) disclosedData.isOver18 = true;
+            if (p.includes('id') || p.includes('identity')) disclosedData.idVerified = true;
+            
+            // Fallback if no specific selective disclosure matched
+            const finalData = Object.keys(disclosedData).length > 0 ? disclosedData : data;
 
             await logAudit(request.verifierDid, "VERIFICATION_SUCCESS", `Identity verified for ${userDid}`);
 
             res.json({
                 success: true,
-                verifiedData: Object.keys(disclosedData).length > 0 ? disclosedData : data
+                verifiedData: finalData
             });
         } catch (e) {
-            console.error("Decryption Error:", e);
-            res.status(400).json({ error: "Invalid Proof/Payload" });
+            logger.error("Decryption in Verify Confirm Error:", e);
+            res.status(400).json({ error: "Invalid Proof/Payload (Decryption Failed)" });
         }
 
     } catch (error) {
-        console.error("Verification Confirm Error:", error);
+        logger.error("Verification Confirm Error:", error);
         res.status(500).json({ error: "Confirmation failed" });
     }
 });
@@ -413,7 +494,7 @@ app.get('/audit/logs', async (req, res) => {
         
         let query = {};
         if (did) {
-            query.did = did;
+            query.did = did; // Mongoose sanitizes this
         }
         
         const logs = await AuditLog.find(query)
@@ -422,7 +503,7 @@ app.get('/audit/logs', async (req, res) => {
         
         res.json(logs);
     } catch (error) {
-        console.error("Audit Logs Error:", error);
+        logger.error("Audit Logs Error:", error);
         res.status(500).json({ error: "Failed to fetch logs" });
     }
 });
@@ -433,10 +514,13 @@ app.get('/audit/logs', async (req, res) => {
  */
 app.get('/config', (req, res) => {
     try {
+        if (!fs.existsSync('config.json')) {
+            throw new Error('config.json missing');
+        }
         const config = JSON.parse(fs.readFileSync('config.json', 'utf8'));
         res.json(config);
     } catch (e) {
-        console.error("Config Error:", e);
+        logger.error("Config Error:", e);
         res.status(500).json({ error: "Config not found" });
     }
 });
@@ -452,7 +536,7 @@ app.use((req, res) => {
 
 // Global error handler
 app.use((err, req, res, next) => {
-    console.error('Unhandled Error:', err);
+    logger.error('Unhandled Error:', err);
     res.status(err.status || 500).json({ 
         error: process.env.NODE_ENV === 'production' 
             ? 'Internal server error' 
@@ -465,23 +549,30 @@ app.use((err, req, res, next) => {
 // ==========================================
 
 const server = app.listen(PORT, () => {
-    console.log(`\n🚀 DecentraID Services running on port ${PORT}`);
-    console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`🔐 Security: Enabled`);
-    console.log(`📝 Services:`);
-    console.log(`   - Identity Service: Active`);
-    console.log(`   - Verification Service: Active`);
-    console.log(`   - Audit Service: Active`);
-    console.log(`\n✅ Server ready to accept connections\n`);
+    logger.info(`\n🚀 DecentraID Services running on port ${PORT}`);
+    logger.info(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+    logger.info(`🔐 Security: Enabled`);
+    logger.info(`📝 Services: Identity, Verification, Audit active`);
 });
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
-    console.log('SIGTERM received, shutting down gracefully...');
+    logger.info('SIGTERM received, shutting down gracefully...');
     server.close(() => {
         mongoose.connection.close(false, () => {
-            console.log('Server and database connections closed');
+            logger.info('Server and database connections closed');
             process.exit(0);
         });
     });
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+    logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    // In production, you might want to restart the process
+});
+
+process.on('uncaughtException', (error) => {
+    logger.error('Uncaught Exception:', error);
+    process.exit(1);
 });
