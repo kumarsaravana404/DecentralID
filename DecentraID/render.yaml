@@ -7,7 +7,7 @@ services:
     plan: free
     repo: https://github.com/kumarsaravana404/DecentralID
     branch: main
-    rootDir: backend
+    rootDir: DecentraID/backend
     buildCommand: npm install
     startCommand: npm start
     envVars:
