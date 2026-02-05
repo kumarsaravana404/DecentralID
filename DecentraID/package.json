@@ -8,7 +8,8 @@
     "deploy": "cd blockchain && npx hardhat run scripts/deploy.js --network localhost",
     "backend": "cd backend && node server.js",
     "frontend": "cd web && npm run dev",
-    "dev": "concurrently -k -n \"CHAIN,DEPLOY,BACKEND,WEB\" -c \"blue,green,magenta,cyan\" \"npm run chain\" \"wait-on tcp:8545 && npm run deploy && npm run backend\" \"wait-on tcp:8545 && wait-on file:web/config.json && npm run frontend\""
+    "dev": "concurrently -k -n \"CHAIN,DEPLOY,BACKEND,WEB\" -c \"blue,green,magenta,cyan\" \"npm run chain\" \"wait-on tcp:8545 && npm run deploy && npm run backend\" \"wait-on tcp:8545 && wait-on file:web/config.json && npm run frontend\"",
+    "demo": "concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix web\""
   },
   "dependencies": {
     "concurrently": "^8.2.2",
