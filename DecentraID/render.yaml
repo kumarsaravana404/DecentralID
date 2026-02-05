@@ -1,0 +1,23 @@
+services:
+  # BACKEND SERVICE
+  - type: web
+    name: decentraid-backend
+    env: node
+    region: singapore # or ohio, frankfurt, etc.
+    plan: free
+    repo: https://github.com/kumarsaravana404/DecentralID
+    branch: main
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: MONGODB_URI
+        sync: false # You must enter this in Render Dashboard
+      - key: ENCRYPTION_KEY
+        sync: false # You must enter this in Render Dashboard (32 chars)
+      - key: CORS_ORIGIN
+        sync: false # Enter your Frontend URL (e.g. https://decentral-id.vercel.app)
