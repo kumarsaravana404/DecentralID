@@ -1,31 +1,34 @@
-import { defineStep } from 'motia';
+import type { ApiRouteConfig, Handlers } from 'motia';
 import { decrypt } from '../src/utils/encryption.js';
 import { GaslessIdentity } from '../src/models/GaslessIdentity.js';
 
-interface GetSharedIdentityInput {
-  shareHash: string;
-}
+export const config: ApiRouteConfig = {
+  type: 'api',
+  name: 'get-shared-identity',
+  path: '/identity/share/:shareHash',
+  method: 'GET',
+  emits: [],
+  description: 'Retrieve identity details by shareable hash'
+};
 
-/**
- * GET /identity/share/:shareHash
- * Retrieve identity details by shareable hash
- */
-export default defineStep({GetSharedIdentityInput>({
-  id: 'get-shared-identity',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      shareHash: { type: 'string' }
-    },
-    required: ['shareHash']
-  },
-  handler: async (input: any) => {
-    const { shareHash } = input;
+export const handler: Handlers['api'] = async (req, { logger }) => {
+  const { shareHash } = req.params;
 
+  if (!shareHash) {
+    return {
+      status: 400,
+      body: { error: 'shareHash parameter is required' }
+    };
+  }
+
+  try {
     const gaslessIdentity = await GaslessIdentity.findOne({ shareHash });
     
     if (!gaslessIdentity) {
-      throw new Error("Identity not found");
+      return {
+        status: 404,
+        body: { error: "Identity not found" }
+      };
     }
 
     // Increment access count
@@ -36,15 +39,24 @@ export default defineStep({GetSharedIdentityInput>({
     const decryptedData = JSON.parse(decrypt(gaslessIdentity.encryptedData));
 
     return {
-      success: true,
-      did: gaslessIdentity.did,
-      personalData: decryptedData,
-      ipfsHash: gaslessIdentity.ipfsHash,
-      onChainStatus: gaslessIdentity.onChainStatus,
-      anchoredBy: gaslessIdentity.anchoredBy,
-      txHash: gaslessIdentity.txHash,
-      createdAt: gaslessIdentity.createdAt,
-      accessCount: gaslessIdentity.accessCount
+      status: 200,
+      body: {
+        success: true,
+        did: gaslessIdentity.did,
+        personalData: decryptedData,
+        ipfsHash: gaslessIdentity.ipfsHash,
+        onChainStatus: gaslessIdentity.onChainStatus,
+        anchoredBy: gaslessIdentity.anchoredBy,
+        txHash: gaslessIdentity.txHash,
+        createdAt: gaslessIdentity.createdAt,
+        accessCount: gaslessIdentity.accessCount
+      }
+    };
+  } catch (error) {
+    logger.error('Get shared identity error:', error);
+    return {
+      status: 500,
+      body: { error: 'Failed to retrieve identity' }
     };
   }
-});
+};

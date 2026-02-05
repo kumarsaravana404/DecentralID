@@ -1,35 +1,34 @@
-import { defineStep } from 'motia';
+import type { ApiRouteConfig, Handlers } from 'motia';
 import { decrypt } from '../src/utils/encryption.js';
 import { logAudit } from '../src/utils/audit.js';
 import { VerificationRequest } from '../src/models/VerificationRequest.js';
 
-interface ConfirmVerificationInput {
-  requestId: number;
-  userDid: string;
-  encryptedPayload: string;
-}
+export const config: ApiRouteConfig = {
+  type: 'api',
+  name: 'confirm-verification',
+  path: '/verify/confirm',
+  method: 'POST',
+  emits: [],
+  description: 'User confirms verification with selective disclosure'
+};
 
-/**
- * POST /verify/confirm
- * User consents and provides proof (Decrypted data or ZK Proof)
- */
-export default defineStep({ConfirmVerificationInput>({
-  id: 'confirm-verification',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      requestId: { type: 'number' },
-      userDid: { type: 'string' },
-      encryptedPayload: { type: 'string' }
-    },
-    required: ['requestId', 'userDid', 'encryptedPayload']
-  },
-  handler: async (input: any) => {
-    const { requestId, userDid, encryptedPayload } = input;
-    
+export const handler: Handlers['api'] = async (req, { logger }) => {
+  const { requestId, userDid, encryptedPayload } = req.body;
+
+  if (!requestId || !userDid || !encryptedPayload) {
+    return {
+      status: 400,
+      body: { error: 'requestId, userDid, and encryptedPayload are required' }
+    };
+  }
+
+  try {
     const request = await VerificationRequest.findOne({ requestId });
     if (!request) {
-      throw new Error("Request not found");
+      return {
+        status: 404,
+        body: { error: "Request not found" }
+      };
     }
 
     const data = JSON.parse(decrypt(encryptedPayload));
@@ -50,8 +49,17 @@ export default defineStep({ConfirmVerificationInput>({
     await logAudit(request.verifierDid, "VERIFICATION_SUCCESS", `Identity verified for ${userDid}`);
 
     return {
-      success: true,
-      verifiedData: finalData
+      status: 200,
+      body: {
+        success: true,
+        verifiedData: finalData
+      }
+    };
+  } catch (error) {
+    logger.error('Verification confirm error:', error);
+    return {
+      status: 500,
+      body: { error: 'Confirmation failed' }
     };
   }
-});
+};

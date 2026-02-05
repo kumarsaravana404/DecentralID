@@ -1,44 +1,30 @@
-import { defineStep } from 'motia';
+import type { ApiRouteConfig, Handlers } from 'motia';
 import crypto from 'crypto';
 import { encrypt } from '../src/utils/encryption.js';
 import { uploadToIPFS } from '../src/utils/ipfs.js';
 import { logAudit } from '../src/utils/audit.js';
 import { GaslessIdentity } from '../src/models/GaslessIdentity.js';
 
-interface CreateGaslessIdentityInput {
-  did: string;
-  personalData: {
-    name?: string;
-    email?: string;
-    [key: string]: any;
-  };
-}
+export const config: ApiRouteConfig = {
+  type: 'api',
+  name: 'create-gasless-identity',
+  path: '/identity/create-gasless',
+  method: 'POST',
+  emits: [],
+  description: 'Create identity without blockchain transaction (gasless)'
+};
 
-interface CreateGaslessIdentityOutput {
-  success: boolean;
-  shareHash: string;
-  shareableLink: string;
-  ipfsHash: string;
-  message: string;
-}
+export const handler: Handlers['api'] = async (req, { logger }) => {
+  const { did, personalData } = req.body;
 
-/**
- * POST /identity/create-gasless
- * Create identity WITHOUT blockchain transaction (no gas needed)
- */
-export default defineStep({CreateGaslessIdentityInput, CreateGaslessIdentityOutput>({
-  id: 'create-gasless-identity',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      did: { type: 'string' },
-      personalData: { type: 'object' }
-    },
-    required: ['did', 'personalData']
-  },
-  handler: async (input: any) => {
-    const { did, personalData } = input;
+  if (!did || !personalData) {
+    return {
+      status: 400,
+      body: { error: 'DID and personalData are required' }
+    };
+  }
 
+  try {
     // 1. Encrypt Data
     const encryptedData = encrypt(JSON.stringify(personalData));
 
@@ -65,11 +51,20 @@ export default defineStep({CreateGaslessIdentityInput, CreateGaslessIdentityOutp
     const shareableLink = `${FRONTEND_URL}/import/${shareHash}`;
 
     return {
-      success: true,
-      shareHash,
-      shareableLink,
-      ipfsHash: mockIpfsCid,
-      message: "Identity created successfully! Share this link to transfer ownership."
+      status: 200,
+      body: {
+        success: true,
+        shareHash,
+        shareableLink,
+        ipfsHash: mockIpfsCid,
+        message: "Identity created successfully! Share this link to transfer ownership."
+      }
+    };
+  } catch (error) {
+    logger.error('Gasless identity creation error:', error);
+    return {
+      status: 500,
+      body: { error: 'Internal Server Error' }
     };
   }
-});
+};

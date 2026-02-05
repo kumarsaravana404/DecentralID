@@ -1,34 +1,37 @@
-import { defineStep } from 'motia';
+import type { ApiRouteConfig, Handlers } from 'motia';
 import { AuditLog } from '../src/models/AuditLog.js';
 
-interface GetAuditLogsInput {
-  did?: string;
-}
+export const config: ApiRouteConfig = {
+  type: 'api',
+  name: 'get-audit-logs',
+  path: '/audit/logs',
+  method: 'GET',
+  emits: [],
+  description: 'Retrieve audit logs with optional DID filtering'
+};
 
-/**
- * GET /audit/logs
- * Retrieve audit logs, optionally filtered by DID
- */
-export default defineStep({GetAuditLogsInput>({
-  id: 'get-audit-logs',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      did: { type: 'string' }
-    }
-  },
-  handler: async (input: any) => {
-    const { did } = input;
+export const handler: Handlers['api'] = async (req, { logger }) => {
+  try {
+    const { did } = req.query;
     
     let query = {};
     if (did) {
-      query = { did };
+      query = { did: String(did) };
     }
     
     const logs = await AuditLog.find(query)
       .sort({ timestamp: -1 })
       .limit(100);
     
-    return logs;
+    return {
+      status: 200,
+      body: logs
+    };
+  } catch (error) {
+    logger.error('Get audit logs error:', error);
+    return {
+      status: 500,
+      body: { error: 'Failed to fetch logs' }
+    };
   }
-});
+};

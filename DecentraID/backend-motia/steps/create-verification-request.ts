@@ -1,32 +1,28 @@
-import { defineStep } from 'motia';
+import type { ApiRouteConfig, Handlers } from 'motia';
 import crypto from 'crypto';
 import { logAudit } from '../src/utils/audit.js';
 import { VerificationRequest } from '../src/models/VerificationRequest.js';
 
-interface CreateVerificationRequestInput {
-  verifierDid: string;
-  userDid: string;
-  purpose: string;
-}
+export const config: ApiRouteConfig = {
+  type: 'api',
+  name: 'create-verification-request',
+  path: '/verify/request',
+  method: 'POST',
+  emits: [],
+  description: 'Create a verification request from verifier to user'
+};
 
-/**
- * POST /verify/request
- * Verifier backend requests a verification
- */
-export default defineStep({CreateVerificationRequestInput>({
-  id: 'create-verification-request',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      verifierDid: { type: 'string' },
-      userDid: { type: 'string' },
-      purpose: { type: 'string' }
-    },
-    required: ['verifierDid', 'userDid', 'purpose']
-  },
-  handler: async (input: any) => {
-    const { verifierDid, userDid, purpose } = input;
-    
+export const handler: Handlers['api'] = async (req, { logger }) => {
+  const { verifierDid, userDid, purpose } = req.body;
+
+  if (!verifierDid || !userDid || !purpose) {
+    return {
+      status: 400,
+      body: { error: 'verifierDid, userDid, and purpose are required' }
+    };
+  }
+
+  try {
     const requestId = crypto.randomInt(100000, 999999);
     
     await VerificationRequest.create({
@@ -40,9 +36,18 @@ export default defineStep({CreateVerificationRequestInput>({
     await logAudit(verifierDid, "VERIFICATION_REQUEST", `Requested data from ${userDid}`);
 
     return {
-      success: true,
-      requestId,
-      message: "Verification request initiated. Waiting for user consent."
+      status: 200,
+      body: {
+        success: true,
+        requestId,
+        message: "Verification request initiated. Waiting for user consent."
+      }
+    };
+  } catch (error) {
+    logger.error('Verification request error:', error);
+    return {
+      status: 500,
+      body: { error: 'Request failed' }
     };
   }
-});
+};

@@ -1,39 +1,41 @@
-import { defineStep } from 'motia';
+import type { ApiRouteConfig, Handlers } from 'motia';
 import { logAudit } from '../src/utils/audit.js';
 import { GaslessIdentity } from '../src/models/GaslessIdentity.js';
 
-interface ClaimIdentityInput {
-  shareHash: string;
-  claimantWallet: string;
-  txHash?: string;
-}
+export const config: ApiRouteConfig = {
+  type: 'api',
+  name: 'claim-identity',
+  path: '/identity/claim',
+  method: 'POST',
+  emits: [],
+  description: 'Claim and anchor a gasless identity on-chain'
+};
 
-/**
- * POST /identity/claim
- * Allow another wallet to claim/anchor a gasless identity on-chain
- */
-export default defineStep({ClaimIdentityInput>({
-  id: 'claim-identity',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      shareHash: { type: 'string' },
-      claimantWallet: { type: 'string' },
-      txHash: { type: 'string' }
-    },
-    required: ['shareHash', 'claimantWallet']
-  },
-  handler: async (input: any) => {
-    const { shareHash, claimantWallet, txHash } = input;
+export const handler: Handlers['api'] = async (req, { logger }) => {
+  const { shareHash, claimantWallet, txHash } = req.body;
 
+  if (!shareHash || !claimantWallet) {
+    return {
+      status: 400,
+      body: { error: 'shareHash and claimantWallet are required' }
+    };
+  }
+
+  try {
     const gaslessIdentity = await GaslessIdentity.findOne({ shareHash });
     
     if (!gaslessIdentity) {
-      throw new Error("Identity not found");
+      return {
+        status: 404,
+        body: { error: "Identity not found" }
+      };
     }
 
     if (gaslessIdentity.onChainStatus === 'ANCHORED') {
-      throw new Error("Identity already anchored on-chain");
+      return {
+        status: 400,
+        body: { error: "Identity already anchored on-chain" }
+      };
     }
 
     // Update the identity with anchor details
@@ -51,10 +53,19 @@ export default defineStep({ClaimIdentityInput>({
     );
 
     return {
-      success: true,
-      message: "Identity successfully anchored on blockchain",
-      newDid: `did:eth:${claimantWallet}`,
-      txHash: gaslessIdentity.txHash
+      status: 200,
+      body: {
+        success: true,
+        message: "Identity successfully anchored on blockchain",
+        newDid: `did:eth:${claimantWallet}`,
+        txHash: gaslessIdentity.txHash
+      }
+    };
+  } catch (error) {
+    logger.error('Claim identity error:', error);
+    return {
+      status: 500,
+      body: { error: 'Claim failed' }
     };
   }
-});
+};

@@ -1,45 +1,36 @@
-import { defineStep } from 'motia';
+import type { ApiRouteConfig, Handlers } from 'motia';
 import { encrypt } from '../src/utils/encryption.js';
 import { uploadToIPFS } from '../src/utils/ipfs.js';
 import { logAudit } from '../src/utils/audit.js';
 
-interface CreateIdentityInput {
-  did: string;
-  personalData: {
-    name?: string;
-    email?: string;
-    [key: string]: any;
-  };
-}
+export const config: ApiRouteConfig = {
+  type: 'api',
+  name: 'create-identity',
+  path: '/identity/create',
+  method: 'POST',
+  emits: [],
+  description: 'Create a new encrypted identity and upload to IPFS'
+};
 
-interface CreateIdentityOutput {
-  success: boolean;
-  ipfsHash: string;
-  encryptedPayload: string;
-}
+export const handler: Handlers['api'] = async (req, { logger }) => {
+  const { did, personalData } = req.body;
 
-/**
- * POST /identity/create
- * Creates a new encrypted identity and uploads to IPFS
- */
-export default defineStep({CreateIdentityInput, CreateIdentityOutput>({
-  id: 'create-identity',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      did: { type: 'string' },
-      personalData: { type: 'object' }
-    },
-    required: ['did', 'personalData']
-  },
-  handler: async (input: any) => {
-    const { did, personalData } = input;
+  if (!did || !personalData) {
+    return {
+      status: 400,
+      body: { error: 'DID and personalData are required' }
+    };
+  }
 
-    // Validate email if provided
-    if (personalData.email && !personalData.email.includes('@')) {
-      throw new Error('Invalid email format');
-    }
+  // Validate email if provided
+  if (personalData.email && !personalData.email.includes('@')) {
+    return {
+      status: 400,
+      body: { error: 'Invalid email format' }
+    };
+  }
 
+  try {
     // 1. Encrypt Data
     const encryptedData = encrypt(JSON.stringify(personalData));
 
@@ -50,9 +41,18 @@ export default defineStep({CreateIdentityInput, CreateIdentityOutput>({
     await logAudit(did, "IDENTITY_CREATION", "Encrypted payload generated");
 
     return {
-      success: true,
-      ipfsHash: mockIpfsCid,
-      encryptedPayload: encryptedData
+      status: 200,
+      body: {
+        success: true,
+        ipfsHash: mockIpfsCid,
+        encryptedPayload: encryptedData
+      }
+    };
+  } catch (error) {
+    logger.error('Identity creation error:', error);
+    return {
+      status: 500,
+      body: { error: 'Internal Server Error' }
     };
   }
-});
+};
