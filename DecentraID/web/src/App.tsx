@@ -41,6 +41,11 @@ export default function App() {
   // Form State
   const [regData, setRegData] = useState({ name: '', dob: '', email: '', govId: '' });
 
+  // Gasless Identity State
+  const [gaslessMode, setGaslessMode] = useState(false);
+  const [shareableLink, setShareableLink] = useState('');
+  const [importHash, setImportHash] = useState('');
+
   useEffect(() => {
     init();
   }, []);
@@ -193,6 +198,88 @@ export default function App() {
       setLoading(false);
     } catch (e) {
       console.error(e);
+      setLoading(false);
+    }
+  };
+
+  const handleGaslessRegister = async () => {
+    if(!regData.name || !regData.email) {
+      alert("Please fill in Name and Email!");
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/identity/create-gasless`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          did: `did:eth:${wallet}`,
+          personalData: regData
+        })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || "Backend failed");
+      }
+
+      const { shareableLink: link, shareHash } = await res.json();
+      setShareableLink(link);
+      alert(`✅ Identity created! \n\nShareable Link:\n${link}\n\nShare this link to transfer ownership to another wallet.`);
+      
+      setLoading(false);
+    } catch (e) {
+      console.error(e);
+      alert("Gasless creation failed: " + (e as Error).message);
+      setLoading(false);
+    }
+  };
+
+  const handleImportIdentity = async () => {
+    if (!importHash) {
+      alert("Please enter a share hash!");
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/identity/share/${importHash}`);
+      
+      if (!res.ok) {
+        throw new Error("Identity not found");
+      }
+
+      const data = await res.json();
+      
+      const confirmClaim = window.confirm(
+        `Found Identity:\n\nName: ${data.personalData.name}\nEmail: ${data.personalData.email}\n\nDo you want to claim this identity on-chain with your wallet?`
+      );
+
+      if (confirmClaim && contracts) {
+        // Anchor on blockchain
+        const tx = await contracts.identity.registerIdentity(wallet, data.ipfsHash);
+        await tx.wait();
+        
+        // Update backend
+        await fetch(`${API_URL}/identity/claim`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            shareHash: importHash,
+            claimantWallet: wallet,
+            txHash: tx.hash
+          })
+        });
+        
+        alert("✅ Identity claimed and anchored on blockchain!");
+        await loadData();
+      }
+      
+      setLoading(false);
+    } catch (e) {
+      console.error(e);
+      alert("Import failed: " + (e as Error).message);
       setLoading(false);
     }
   };
@@ -384,19 +471,47 @@ export default function App() {
                                 />
                               </div>
                             </div>
-                            <button 
-                              onClick={handleRegister}
-                              disabled={loading}
-                              className="w-full bg-primary py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-primary/80 transition-all disabled:opacity-50"
-                            >
-                              {loading ? "Processing..." : "Register Identity"}
-                              {!loading && <Plus size={20} />}
-                            </button>
+                            {/* Registration Buttons */}
+                            <div className="space-y-3">
+                              <button 
+                                onClick={handleRegister}
+                                disabled={loading}
+                                className="w-full bg-primary py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-primary/80 transition-all disabled:opacity-50"
+                              >
+                                {loading ? "Processing..." : "Register Identity (Requires Gas)"}
+                                {!loading && <Plus size={20} />}
+                              </button>
+                              
+                              <button 
+                                onClick={handleGaslessRegister}
+                                disabled={loading}
+                                className="w-full bg-secondary py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-secondary/80 transition-all disabled:opacity-50"
+                              >
+                                {loading ? "Processing..." : "🚀 Create Gasless Identity (No Gas!)"}
+                              </button>
+                              
+                              <div className="flex items-center gap-2 pt-4">
+                                <input 
+                                  placeholder="Import from Share Hash"
+                                  value={importHash}
+                                  onChange={e => setImportHash(e.target.value)}
+                                  className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-accent/50 transition-all font-medium text-sm"
+                                />
+                                <button
+                                  onClick={handleImportIdentity}
+                                  disabled={loading || !importHash}
+                                  className="bg-accent px-6 py-3 rounded-xl font-bold hover:bg-accent/80 transition-all disabled:opacity-50"
+                                >
+                                  Import
+                                </button>
+                              </div>
+                            </div>
                           </div>
                           <div className="w-full md:w-64 aspect-square glass rounded-3xl flex items-center justify-center border border-white/10 flex-col gap-4 text-center p-6 relative">
                             <div className="absolute inset-0 bg-primary/20 blur-[80px] -z-10 rounded-full"></div>
                             <Fingerprint size={64} className="text-primary/50" />
                             <p className="text-xs text-gray-500 font-mono">ENCRYPTION: AES-256-CBC</p>
+                            <p className="text-[10px] text-accent font-bold">⚡ NOW GASLESS READY</p>
                           </div>
                         </div>
                       </div>

@@ -15,6 +15,7 @@ dotenv.config();
 // Import models
 const AuditLog = require('./models/AuditLog');
 const VerificationRequest = require('./models/VerificationRequest');
+const GaslessIdentity = require('./models/GaslessIdentity');
 
 // ==========================================
 // LOGGER CONFIGURATION (Winston)
@@ -524,6 +525,161 @@ app.get('/config', (req, res) => {
         res.status(500).json({ error: "Config not found" });
     }
 });
+
+// ==========================================
+// GASLESS IDENTITY SERVICE
+// ==========================================
+
+/*
+ * POST /identity/create-gasless
+ * Create identity WITHOUT blockchain transaction (no gas needed)
+ * Returns shareable hash link
+ */
+app.post('/identity/create-gasless', [
+    body('did').isString().notEmpty().withMessage('DID is required'),
+    body('personalData').isObject().withMessage('Personal data must be an object'),
+    body('personalData.name').optional().isString(),
+    body('personalData.email').optional().isEmail().withMessage('Invalid email format'),
+], async (req, res) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ error: 'Validation failed', details: errors.array() });
+        }
+
+        const { did, personalData } = req.body;
+
+        // 1. Encrypt Data
+        const encryptedData = encrypt(JSON.stringify(personalData));
+
+        // 2. Generate IPFS Hash
+        const mockIpfsCid = await uploadToIPFS(encryptedData);
+
+        // 3. Generate Unique Shareable Hash
+        const shareHash = crypto.randomBytes(16).toString('hex');
+
+        // 4. Store in Database (OFF-CHAIN)
+        await GaslessIdentity.create({
+            shareHash,
+            did,
+            encryptedData,
+            ipfsHash: mockIpfsCid,
+            onChainStatus: 'PENDING'
+        });
+
+        // 5. Log Audit
+        await logAudit(did, "GASLESS_IDENTITY_CREATION", "Identity created without blockchain tx");
+
+        // 6. Generate shareable link
+        const shareableLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/import/${shareHash}`;
+
+        res.json({
+            success: true,
+            shareHash,
+            shareableLink,
+            ipfsHash: mockIpfsCid,
+            message: "Identity created successfully! Share this link to transfer ownership."
+        });
+
+    } catch (error) {
+        logger.error("Gasless Identity Creation Error:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
+/*
+ * GET /identity/share/:shareHash
+ * Retrieve identity details by shareable hash
+ */
+app.get('/identity/share/:shareHash', async (req, res) => {
+    try {
+        const { shareHash } = req.params;
+
+        const gaslessIdentity = await GaslessIdentity.findOne({ shareHash });
+        
+        if (!gaslessIdentity) {
+            return res.status(404).json({ error: "Identity not found" });
+        }
+
+        // Increment access count
+        gaslessIdentity.accessCount += 1;
+        await gaslessIdentity.save();
+
+        // Decrypt the data for display
+        const decryptedData = JSON.parse(decrypt(gaslessIdentity.encryptedData));
+
+        res.json({
+            success: true,
+            did: gaslessIdentity.did,
+            personalData: decryptedData,
+            ipfsHash: gaslessIdentity.ipfsHash,
+            onChainStatus: gaslessIdentity.onChainStatus,
+            anchoredBy: gaslessIdentity.anchoredBy,
+            txHash: gaslessIdentity.txHash,
+            createdAt: gaslessIdentity.createdAt,
+            accessCount: gaslessIdentity.accessCount
+        });
+
+    } catch (error) {
+        logger.error("Share Retrieval Error:", error);
+        res.status(500).json({ error: "Failed to retrieve identity" });
+    }
+});
+
+/*
+ * POST /identity/claim
+ * Allow another wallet to claim/anchor a gasless identity on-chain
+ */
+app.post('/identity/claim', [
+    body('shareHash').isString().notEmpty(),
+    body('claimantWallet').isString().notEmpty(),
+    body('txHash').optional().isString(),
+], async (req, res) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ error: 'Validation failed', details: errors.array() });
+        }
+
+        const { shareHash, claimantWallet, txHash } = req.body;
+
+        const gaslessIdentity = await GaslessIdentity.findOne({ shareHash });
+        
+        if (!gaslessIdentity) {
+            return res.status(404).json({ error: "Identity not found" });
+        }
+
+        if (gaslessIdentity.onChainStatus === 'ANCHORED') {
+            return res.status(400).json({ error: "Identity already anchored on-chain" });
+        }
+
+        // Update the identity with anchor details
+        gaslessIdentity.onChainStatus = 'ANCHORED';
+        gaslessIdentity.anchoredBy = claimantWallet;
+        gaslessIdentity.txHash = txHash || 'PENDING';
+        gaslessIdentity.anchoredAt = new Date();
+        await gaslessIdentity.save();
+
+        await logAudit(
+            `did:eth:${claimantWallet}`, 
+            "IDENTITY_CLAIMED", 
+            `Claimed gasless identity ${shareHash}`,
+            txHash
+        );
+
+        res.json({
+            success: true,
+            message: "Identity successfully anchored on blockchain",
+            newDid: `did:eth:${claimantWallet}`,
+            txHash: gaslessIdentity.txHash
+        });
+
+    } catch (error) {
+        logger.error("Identity Claim Error:", error);
+        res.status(500).json({ error: "Claim failed" });
+    }
+});
+
 
 // ==========================================
 // ERROR HANDLING
