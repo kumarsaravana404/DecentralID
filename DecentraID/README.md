@@ -9,7 +9,7 @@ A **production-ready** self-sovereign identity (SSI) system built on blockchain 
 ## 📋 Table of Contents
 
 1. [Quick Deployment](#-quick-deployment-reference)
-2. [Project Overview](#-project-overview)
+2. [Project Overview](#project-overview)
 3. [System Architecture](#-system-architecture)
 4. [Production Readiness](#-production-readiness)
 5. [Detailed Deployment Guide](#-detailed-deployment-guide)
@@ -67,7 +67,7 @@ Update `CORS_ORIGIN` and `FRONTEND_URL` in Render with your actual Vercel URL.
 
 ---
 
-## ℹ️ Project Overview
+## Project Overview
 
 **DecentraID** enables users to fully control their digital identity (DID).
 
@@ -136,7 +136,7 @@ npm run check-deploy
 
 ### Environment Variables
 
-**Backend (.env)**
+#### Backend (.env)
 
 | Variable         | Description               |
 | :--------------- | :------------------------ |
@@ -147,7 +147,7 @@ npm run check-deploy
 | `NODE_ENV`       | `production`              |
 | `PORT`           | `5000`                    |
 
-**Frontend (.env)**
+#### Frontend (.env)
 
 | Variable       | Description         |
 | :------------- | :------------------ |
