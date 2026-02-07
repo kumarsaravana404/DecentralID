@@ -211,11 +211,19 @@ export default function App() {
     
     setLoading(true);
     try {
+      let targetDid = wallet ? `did:eth:${wallet}` : '';
+      
+      if (!targetDid) {
+        // Generate a random temporary address for the DID
+        const randomWallet = ethers.Wallet.createRandom();
+        targetDid = `did:eth:${randomWallet.address}`;
+      }
+
       const res = await fetch(`${API_URL}/identity/create-gasless`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          did: `did:eth:${wallet}`,
+          did: targetDid,
           personalData: regData
         })
       });
@@ -227,7 +235,7 @@ export default function App() {
 
       const { shareableLink: link } = await res.json();
       setShareableLink(link);
-      alert(`✅ Identity created! \n\nShareable Link:\n${link}\n\nShare this link to transfer ownership to another wallet.`);
+      // Removed alert, using Modal instead
       
       setLoading(false);
     } catch (e) {
@@ -358,17 +366,50 @@ export default function App() {
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="max-w-md"
+              className="max-w-md w-full"
             >
               <Fingerprint size={80} className="text-primary mx-auto mb-6 opacity-50" />
               <h2 className="text-4xl font-bold mb-4">Your Identity, Your Control</h2>
-              <p className="text-gray-400 mb-8">DecentraID empowers you to own and manage your digital credentials securely on the blockchain. Connect your wallet to begin.</p>
-              <button 
-                onClick={connectWallet}
-                className="bg-white text-black px-10 py-4 rounded-full font-bold text-lg hover:shadow-[0_0_30px_rgba(255,255,255,0.3)] transition-all"
-              >
-                Get Started
-              </button>
+              <p className="text-gray-400 mb-8">DecentraID empowers you to own and manage your digital credentials securely on the blockchain.</p>
+              
+              <div className="flex flex-col gap-4 w-full">
+                <button 
+                  onClick={connectWallet}
+                  className="bg-white text-black px-10 py-4 rounded-full font-bold text-lg hover:shadow-[0_0_30px_rgba(255,255,255,0.3)] transition-all"
+                >
+                  Connect Wallet
+                </button>
+                
+                {/* Gasless Identity Form for No-Wallet Users */}
+                <div className="glass p-6 rounded-3xl border border-white/10 mt-6 animate-fade-in text-left">
+                  <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                    <Zap size={18} className="text-secondary" />
+                    No Wallet? Go Gasless!
+                  </h3>
+                  <div className="space-y-3">
+                    <input 
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 outline-none text-sm"
+                      placeholder="Full Name"
+                      value={regData.name}
+                      onChange={e => setRegData({...regData, name: e.target.value})}
+                    />
+                    <input 
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 outline-none text-sm"
+                      placeholder="Email"
+                      value={regData.email}
+                      onChange={e => setRegData({...regData, email: e.target.value})}
+                    />
+                    <button 
+                      onClick={handleGaslessRegister}
+                      disabled={loading || !regData.name || !regData.email}
+                      className="w-full bg-secondary py-3 rounded-xl font-bold text-sm hover:bg-secondary/80 transition-all disabled:opacity-50"
+                    >
+                      {loading ? "Creating..." : "Create Gasless ID"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
             </motion.div>
           </div>
         ) : (
@@ -733,6 +774,83 @@ export default function App() {
                 <p className="text-sm text-gray-400">Securing your cryptographic proof on the decentralized ledger...</p>
               </div>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Share Link Modal */}
+      <AnimatePresence>
+        {shareableLink && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-md flex items-center justify-center p-6"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              className="bg-[#121212] border border-white/10 p-8 rounded-[2rem] max-w-md w-full shadow-2xl relative"
+            >
+              <button 
+                onClick={() => setShareableLink('')}
+                className="absolute top-4 right-4 p-2 hover:bg-white/10 rounded-full transition-colors"
+              >
+                <XCircle size={24} className="text-gray-500" />
+              </button>
+              
+              <div className="w-16 h-16 bg-secondary/20 rounded-2xl flex items-center justify-center mb-6 mx-auto">
+                <Zap size={32} className="text-secondary fill-secondary" />
+              </div>
+              
+              <div className="text-center mb-8">
+                <h3 className="text-2xl font-bold mb-2">Identity Created!</h3>
+                <p className="text-gray-400 text-sm">Your secure identity has been generated off-chain. Share this link to claim it.</p>
+              </div>
+
+              <div className="bg-black/40 p-4 rounded-xl border border-white/5 break-all font-mono text-xs mb-6 text-gray-300 relative group">
+                {shareableLink}
+                <div className="absolute top-2 right-2 flex gap-2">
+                   <button 
+                     onClick={() => {
+                        navigator.clipboard.writeText(shareableLink);
+                        alert("Copied to clipboard!");
+                     }}
+                     className="bg-white/10 hover:bg-white/20 p-2 rounded-lg transition-colors"
+                     title="Copy Link"
+                   >
+                     <Copy size={14} />
+                   </button>
+                   <a 
+                     href={shareableLink}
+                     target="_blank"
+                     rel="noreferrer"
+                     className="bg-primary/20 hover:bg-primary/30 text-primary p-2 rounded-lg transition-colors"
+                     title="Open Link"
+                   >
+                     <ExternalLink size={14} />
+                   </a>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => {
+                    navigator.clipboard.writeText(shareableLink);
+                    alert("Copied to clipboard!");
+                  }}
+                  className="flex-1 bg-white text-black py-3 rounded-xl font-bold hover:shadow-lg transition-all flex items-center justify-center gap-2"
+                >
+                  <Copy size={18} /> Copy Link
+                </button>
+                <button 
+                  onClick={() => setShareableLink('')}
+                  className="px-6 py-3 rounded-xl bg-white/5 hover:bg-white/10 font-bold transition-colors"
+                >
+                  Done
+                </button>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
