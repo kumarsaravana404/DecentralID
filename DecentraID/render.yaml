@@ -10,9 +10,8 @@ services:
     plan: free
     repo: https://github.com/kumarsaravana404/DecentralID
     branch: main
-    rootDir: backend
-    buildCommand: npm install
-    startCommand: npm start
+    buildCommand: ls -la && cd backend && npm install
+    startCommand: cd backend && npm start
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
