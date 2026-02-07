@@ -5,13 +5,12 @@ services:
   # BACKEND SERVICE
   - type: web
     name: decentraid-backend
-    env: node
+    runtime: node
     region: singapore
     plan: free
-    repo: https://github.com/kumarsaravana404/DecentralID
-    branch: main
-    buildCommand: ls -la && cd backend && npm install
-    startCommand: cd backend && npm start
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
