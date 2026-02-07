@@ -8,14 +8,13 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const compression = require('compression');
 const { body, validationResult } = require('express-validator');
-const mongoose = require('mongoose');
 const winston = require('winston');
 
 // Load environment variables
 dotenv.config();
 
 // Validate required environment variables in production
-const requiredEnvVars = ['MONGODB_URI', 'ENCRYPTION_KEY'];
+const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'ENCRYPTION_KEY'];
 if (process.env.NODE_ENV === 'production') {
     const missing = requiredEnvVars.filter(v => !process.env[v]);
     if (missing.length > 0) {
@@ -24,10 +23,11 @@ if (process.env.NODE_ENV === 'production') {
     }
 }
 
-// Import models
-const AuditLog = require('./models/AuditLog');
-const VerificationRequest = require('./models/VerificationRequest');
-const GaslessIdentity = require('./models/GaslessIdentity');
+// Import Supabase client and services
+const { supabase, testSupabaseConnection } = require('./supabaseClient');
+const AuditLogService = require('./services/AuditLogService');
+const VerificationRequestService = require('./services/VerificationRequestService');
+const GaslessIdentityService = require('./services/GaslessIdentityService');
 
 // ==========================================
 // LOGGER CONFIGURATION (Winston)
@@ -182,28 +182,18 @@ app.use((req, res, next) => {
 });
 
 // ==========================================
-// DATABASE CONNECTION
+// DATABASE CONNECTION (SUPABASE)
 // ==========================================
-
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/decentraid';
-
-const mongooseOptions = {
-    maxPoolSize: parseInt(process.env.MONGODB_POOL_SIZE) || 10,
-    serverSelectionTimeoutMS: 5000,
-    socketTimeoutMS: 45000,
-    retryWrites: true,
-    w: 'majority'
-};
 
 const connectDB = async () => {
     try {
-        await mongoose.connect(MONGODB_URI, mongooseOptions);
-        logger.info('✅ MongoDB Connected', { 
-            host: mongoose.connection.host,
-            name: mongoose.connection.name 
-        });
+        const isConnected = await testSupabaseConnection();
+        if (!isConnected && process.env.NODE_ENV === 'production') {
+            logger.error('Cannot start without database in production mode');
+            process.exit(1);
+        }
     } catch (err) {
-        logger.error('❌ MongoDB Connection Error:', err.message);
+        logger.error('❌ Supabase Connection Error:', err.message);
         if (process.env.NODE_ENV === 'production') {
             logger.error('Cannot start without database in production mode');
             process.exit(1);
@@ -211,16 +201,6 @@ const connectDB = async () => {
     }
 };
 connectDB();
-
-mongoose.connection.on('error', err => logger.error('MongoDB Runtime Error:', err.message));
-mongoose.connection.on('disconnected', () => {
-    logger.warn('MongoDB Disconnected');
-    // Attempt reconnection in production
-    if (process.env.NODE_ENV === 'production') {
-        setTimeout(connectDB, 5000);
-    }
-});
-mongoose.connection.on('reconnected', () => logger.info('MongoDB Reconnected'));
 
 // ==========================================
 // ENVIRONMENT VALIDATION
@@ -289,7 +269,6 @@ async function uploadToIPFS(data) {
 
 async function logAudit(did, action, details, txHash = 'OFF-CHAIN') {
     const log = {
-        id: crypto.randomUUID(),
         did,
         action,
         details,
@@ -298,7 +277,7 @@ async function logAudit(did, action, details, txHash = 'OFF-CHAIN') {
     };
     
     try {
-        await AuditLog.create(log);
+        await AuditLogService.create(log);
         logger.info(`[AUDIT] ${action} - ${did}`);
     } catch (error) {
         logger.error('Audit log error:', error);
@@ -321,17 +300,18 @@ app.get('/health', (req, res) => {
 
 app.get('/ready', async (req, res) => {
     try {
-        const dbState = mongoose.connection.readyState;
-        const dbStates = { 0: 'disconnected', 1: 'connected', 2: 'connecting', 3: 'disconnecting' };
+        // Test Supabase connection by querying a table
+        const { data, error } = await supabase
+            .from('audit_logs')
+            .select('count', { count: 'exact', head: true });
         
-        if (dbState !== 1) {
-            throw new Error(`Database ${dbStates[dbState] || 'unknown'}`);
+        if (error && error.code !== 'PGRST116') { // PGRST116 = table doesn't exist yet
+            throw new Error(`Supabase error: ${error.message}`);
         }
         
-        await mongoose.connection.db.admin().ping();
         res.json({ 
             status: 'ready', 
-            database: 'connected',
+            database: 'connected (Supabase)',
             timestamp: new Date().toISOString(),
             checks: {
                 database: 'healthy',
@@ -519,7 +499,7 @@ app.post('/verify/request', strictLimiter, [
         // Frontend might expect a number, so sticking to randomInt but ensuring range.
         const requestId = crypto.randomInt(100000, 999999);
         
-        await VerificationRequest.create({
+        await VerificationRequestService.create({
             requestId,
             verifierDid,
             userDid,
@@ -557,7 +537,7 @@ app.post('/verify/confirm', [
 
         const { requestId, userDid, encryptedPayload } = req.body;
         
-        const request = await VerificationRequest.findOne({ requestId });
+        const request = await VerificationRequestService.findOne({ requestId });
         if (!request) {
             return res.status(404).json({ error: "Request not found" });
         }
@@ -607,12 +587,13 @@ app.get('/audit/logs', async (req, res) => {
         
         let query = {};
         if (did) {
-            query.did = did; // Mongoose sanitizes this
+            query.did = did;
         }
         
-        const logs = await AuditLog.find(query)
-            .sort({ timestamp: -1 })
-            .limit(100);
+        const logs = await AuditLogService.find(query, { 
+            sort: { timestamp: -1 }, 
+            limit: 100 
+        });
         
         res.json(logs);
     } catch (error) {
@@ -671,7 +652,7 @@ app.post('/identity/create-gasless', strictLimiter, [
         const shareHash = crypto.randomBytes(16).toString('hex');
 
         // 4. Store in Database (OFF-CHAIN)
-        await GaslessIdentity.create({
+        await GaslessIdentityService.create({
             shareHash,
             did,
             encryptedData,
@@ -707,15 +688,14 @@ app.get('/identity/share/:shareHash', async (req, res) => {
     try {
         const { shareHash } = req.params;
 
-        const gaslessIdentity = await GaslessIdentity.findOne({ shareHash });
+        const gaslessIdentity = await GaslessIdentityService.findOne({ shareHash });
         
         if (!gaslessIdentity) {
             return res.status(404).json({ error: "Identity not found" });
         }
 
         // Increment access count
-        gaslessIdentity.accessCount += 1;
-        await gaslessIdentity.save();
+        await GaslessIdentityService.incrementAccessCount(shareHash);
 
         // Decrypt the data for display
         const decryptedData = JSON.parse(decrypt(gaslessIdentity.encryptedData));
@@ -755,7 +735,7 @@ app.post('/identity/claim', [
 
         const { shareHash, claimantWallet, txHash } = req.body;
 
-        const gaslessIdentity = await GaslessIdentity.findOne({ shareHash });
+        const gaslessIdentity = await GaslessIdentityService.findOne({ shareHash });
         
         if (!gaslessIdentity) {
             return res.status(404).json({ error: "Identity not found" });
