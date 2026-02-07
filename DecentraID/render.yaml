@@ -1,16 +1,13 @@
-# DecentraID Backend - Render Deployment Configuration
-# This file configures automatic deployment to Render.com
-
 services:
-  # BACKEND SERVICE
   - type: web
     name: decentraid-backend
     runtime: node
     region: singapore
     plan: free
-    rootDir: backend
-    buildCommand: npm install
-    startCommand: npm start
+    repo: https://github.com/kumarsaravana404/DecentralID
+    branch: main
+    buildCommand: npm install --prefix backend
+    startCommand: npm start --prefix backend
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
@@ -29,9 +26,3 @@ services:
         sync: false
       - key: FRONTEND_URL
         sync: false
-      - key: RATE_LIMIT_WINDOW_MS
-        value: 900000
-      - key: RATE_LIMIT_MAX_REQUESTS
-        value: 100
-      - key: LOG_LEVEL
-        value: info
