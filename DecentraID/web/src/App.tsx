@@ -44,6 +44,7 @@ export default function App() {
   // Gasless Identity State
   const [shareableLink, setShareableLink] = useState('');
   const [importHash, setImportHash] = useState('');
+  const [previewIdentity, setPreviewIdentity] = useState<any>(null);
 
   useEffect(() => {
     init();
@@ -58,6 +59,16 @@ export default function App() {
       if (hash) {
         setImportHash(hash);
         console.log("Import hash detected from URL:", hash);
+        
+        // Auto-fetch identity details for preview
+        fetch(`${API_URL}/identity/share/${hash}`)
+          .then(res => res.json())
+          .then(data => {
+            if (!data.error) {
+              setPreviewIdentity({ ...data, shareHash: hash });
+            }
+          })
+          .catch(err => console.error("Failed to fetch preview:", err));
       }
     }
   }, []);
@@ -280,14 +291,22 @@ export default function App() {
       }
 
       const data = await res.json();
-      
-      const confirmClaim = window.confirm(
-        `Found Identity:\n\nName: ${data.personalData.name}\nEmail: ${data.personalData.email}\n\nDo you want to claim this identity on-chain with your wallet?`
-      );
+      setPreviewIdentity({ ...data, shareHash: hashToUse });
+      setLoading(false);
+    } catch (e) {
+      console.error(e);
+      alert("Import failed: " + (e as Error).message);
+      setLoading(false);
+    }
+  };
 
-      if (confirmClaim && contracts) {
+  const confirmClaimIdentity = async () => {
+    if (!previewIdentity || !contracts || !wallet) return;
+    
+    setLoading(true);
+    try {
         // Anchor on blockchain
-        const tx = await contracts.identity.registerIdentity(wallet, data.ipfsHash);
+        const tx = await contracts.identity.registerIdentity(wallet, previewIdentity.ipfsHash);
         await tx.wait();
         
         // Update backend
@@ -295,20 +314,24 @@ export default function App() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            shareHash: hashToUse,
+            shareHash: previewIdentity.shareHash,
             claimantWallet: wallet,
             txHash: tx.hash
           })
         });
         
+        setPreviewIdentity(null);
+        setImportHash('');
+        
+        // Clear URL if needed
+        window.history.pushState({}, '', '/');
+        
         alert("✅ Identity claimed and anchored on blockchain!");
         await loadData();
-      }
-      
-      setLoading(false);
     } catch (e) {
       console.error(e);
-      alert("Import failed: " + (e as Error).message);
+      alert("Claim failed: " + (e as Error).message);
+    } finally {
       setLoading(false);
     }
   };
@@ -869,6 +892,76 @@ export default function App() {
                 >
                   Done
                 </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Identity Preview Modal */}
+      <AnimatePresence>
+        {previewIdentity && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-md flex items-center justify-center p-6"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              className="bg-[#121212] border border-white/10 p-8 rounded-[2rem] max-w-lg w-full shadow-2xl relative"
+            >
+              <button 
+                onClick={() => setPreviewIdentity(null)}
+                className="absolute top-4 right-4 p-2 hover:bg-white/10 rounded-full transition-colors"
+              >
+                <XCircle size={24} className="text-gray-500" />
+              </button>
+              
+              <div className="text-center mb-6">
+                 <div className="w-16 h-16 bg-primary/20 rounded-2xl flex items-center justify-center mb-4 mx-auto animate-pulse">
+                    <Fingerprint size={32} className="text-primary" />
+                 </div>
+                 <h3 className="text-2xl font-bold">Identity Found</h3>
+                 <p className="text-gray-400 text-sm">Review the details below to claim this identity.</p>
+              </div>
+
+              <div className="glass rounded-xl p-6 space-y-4 mb-8">
+                 <div className="flex justify-between border-b border-white/5 pb-2">
+                    <span className="text-gray-500 font-mono text-xs uppercase">Full Name</span>
+                    <span className="font-bold">{previewIdentity.personalData.name}</span>
+                 </div>
+                 <div className="flex justify-between border-b border-white/5 pb-2">
+                    <span className="text-gray-500 font-mono text-xs uppercase">Email</span>
+                    <span className="font-bold">{previewIdentity.personalData.email}</span>
+                 </div>
+                 <div className="flex justify-between border-b border-white/5 pb-2">
+                    <span className="text-gray-500 font-mono text-xs uppercase">Created At</span>
+                    <span className="font-mono text-xs">{new Date(previewIdentity.createdAt).toLocaleString()}</span>
+                 </div>
+                 <div className="flex flex-col gap-1 pt-2">
+                    <span className="text-gray-500 font-mono text-xs uppercase">Temporary DID</span>
+                    <span className="font-mono text-[10px] bg-black/40 p-2 rounded break-all text-gray-400">{previewIdentity.did}</span>
+                 </div>
+              </div>
+
+              <div className="flex gap-3">
+                {wallet ? (
+                    <button 
+                      onClick={confirmClaimIdentity}
+                      className="flex-1 bg-green-500 text-black py-4 rounded-xl font-bold hover:bg-green-400 transition-all flex items-center justify-center gap-2"
+                    >
+                      <CheckCircle2 size={18} /> Claim Identity
+                    </button>
+                ) : (
+                    <button 
+                      onClick={connectWallet}
+                      className="flex-1 bg-white text-black py-4 rounded-xl font-bold hover:bg-gray-200 transition-all flex items-center justify-center gap-2"
+                    >
+                      <Wallet size={18} /> Connect Wallet to Claim
+                    </button>
+                )}
               </div>
             </motion.div>
           </motion.div>
