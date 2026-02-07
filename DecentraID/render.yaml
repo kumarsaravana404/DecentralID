@@ -19,7 +19,9 @@ services:
         value: production
       - key: PORT
         value: 5000
-      - key: MONGODB_URI
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
         sync: false
       - key: ENCRYPTION_KEY
         sync: false
@@ -33,5 +35,3 @@ services:
         value: 100
       - key: LOG_LEVEL
         value: info
-      - key: MONGODB_POOL_SIZE
-        value: 10
