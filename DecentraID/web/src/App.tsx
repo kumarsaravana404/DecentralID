@@ -50,6 +50,18 @@ export default function App() {
     if (shareableLink) console.log("New link generated:", shareableLink);
   }, [shareableLink]);
 
+  // Detect import hash from URL
+  useEffect(() => {
+    const path = window.location.pathname;
+    if (path.includes('/import/')) {
+      const hash = path.split('/import/')[1];
+      if (hash) {
+        setImportHash(hash);
+        console.log("Import hash detected from URL:", hash);
+      }
+    }
+  }, []);
+
   const init = async () => {
     if (typeof window.ethereum !== 'undefined') {
       try {
@@ -246,14 +258,22 @@ export default function App() {
   };
 
   const handleImportIdentity = async () => {
-    if (!importHash) {
-      alert("Please enter a share hash!");
+    // Clean input (handle full URL if pasted)
+    let hashToUse = importHash.trim();
+    if (hashToUse.includes('/import/')) {
+        hashToUse = hashToUse.split('/import/')[1];
+    }
+    // Remove query string if any
+    hashToUse = hashToUse.split('?')[0];
+
+    if (!hashToUse) {
+      alert("Please enter a valid share hash!");
       return;
     }
     
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/identity/share/${importHash}`);
+      const res = await fetch(`${API_URL}/identity/share/${hashToUse}`);
       
       if (!res.ok) {
         throw new Error("Identity not found");
@@ -275,7 +295,7 @@ export default function App() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            shareHash: importHash,
+            shareHash: hashToUse,
             claimantWallet: wallet,
             txHash: tx.hash
           })
