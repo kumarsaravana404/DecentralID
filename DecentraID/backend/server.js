@@ -773,6 +773,19 @@ app.post('/identity/claim', [
 });
 
 
+// Root Endpoint - Welcome Message
+app.get('/', (req, res) => {
+    res.json({
+        message: 'Welcome to DecentraID API',
+        status: 'running',
+        documentation: 'https://github.com/kumarsaravana404/DecentraID',
+        endpoints: {
+            health: '/health',
+            ready: '/ready'
+        }
+    });
+});
+
 // ==========================================
 // ERROR HANDLING
 // ==========================================
