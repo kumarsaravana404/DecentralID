@@ -62,6 +62,12 @@ async function runTests() {
     console.log('Test 3: Testing CRUD operations...');
     
     try {
+        // Clean up any existing test data first
+        const { error: cleanupError } = await supabase.from('audit_logs').delete().eq('did', 'did:test:123');
+        if (cleanupError) {
+             console.log('⚠️ Cleanup DELETE failed (likely due to missing RLS policy):', cleanupError.message);
+        }
+
         // Create a test audit log
         const { data: insertData, error: insertError } = await supabase
             .from('audit_logs')
