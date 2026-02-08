@@ -14,7 +14,7 @@ if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
 // Create Supabase client
 const supabase = createClient(
     process.env.SUPABASE_URL,
-    process.env.SUPABASE_ANON_KEY,
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY,
     {
         auth: {
             persistSession: false, // Server-side doesn't need session persistence
@@ -25,6 +25,10 @@ const supabase = createClient(
         }
     }
 );
+
+if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    console.warn('⚠️ WARNING: Using SUPABASE_ANON_KEY. Backend should use SUPABASE_SERVICE_ROLE_KEY for full access without RLS policies.');
+}
 
 // Test connection function
 async function testSupabaseConnection() {
