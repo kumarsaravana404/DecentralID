@@ -115,7 +115,7 @@ const corsOptions = {
     origin: function (origin, callback) {
         const allowedOrigins = process.env.CORS_ORIGIN 
             ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
-            : ['http://localhost:5173'];
+            : ['http://localhost:5173', 'https://decentral-id.vercel.app'];
         
         // Allow requests with no origin (mobile apps, Postman, etc.) or if explicitly allowed
         // also checking if origin is included in allowedOrigins which might be a list of strings
