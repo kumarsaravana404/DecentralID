@@ -207,8 +207,9 @@ connectDB();
 // ==========================================
 
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
-if (!ENCRYPTION_KEY || ENCRYPTION_KEY.length !== 32) {
-    logger.error('❌ ENCRYPTION_KEY must be exactly 32 characters');
+const ENCRYPTION_KEY_BYTES = ENCRYPTION_KEY ? Buffer.from(ENCRYPTION_KEY, 'utf8') : null;
+if (!ENCRYPTION_KEY_BYTES || ENCRYPTION_KEY_BYTES.length !== 32) {
+    logger.error('❌ ENCRYPTION_KEY must be exactly 32 bytes (utf8).');
     if (process.env.NODE_ENV === 'production') {
         process.exit(1);
     } else {
@@ -608,10 +609,11 @@ app.get('/audit/logs', async (req, res) => {
  */
 app.get('/config', (req, res) => {
     try {
-        if (!fs.existsSync('config.json')) {
+        const configPath = path.join(__dirname, 'config.json');
+        if (!fs.existsSync(configPath)) {
             throw new Error('config.json missing');
         }
-        const config = JSON.parse(fs.readFileSync('config.json', 'utf8'));
+        const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
         res.json(config);
     } catch (e) {
         logger.error("Config Error:", e);
@@ -828,8 +830,8 @@ const gracefulShutdown = (signal) => {
         logger.info('HTTP server closed');
         
         try {
-            await mongoose.connection.close();
-            logger.info('Database connection closed');
+            // Supabase uses persistent HTTP connections — no explicit close needed.
+            logger.info('Shutdown complete. Supabase connections released.');
             process.exit(0);
         } catch (err) {
             logger.error('Error during shutdown:', err);
@@ -850,7 +852,9 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (reason, promise) => {
     logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
-    // In production, you might want to restart the process
+    if (process.env.NODE_ENV === 'production') {
+        process.exit(1);
+    }
 });
 
 process.on('uncaughtException', (error) => {

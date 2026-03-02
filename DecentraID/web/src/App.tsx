@@ -48,7 +48,6 @@ export default function App() {
 
   useEffect(() => {
     init();
-    if (shareableLink) console.log("New link generated:", shareableLink);
   }, [shareableLink]);
 
   // Detect import hash from URL
@@ -349,6 +348,7 @@ export default function App() {
         body: JSON.stringify({ 
           requestId: requestId.toNumber ? requestId.toNumber() : requestId, 
           userDid: wallet, 
+          // DEMO: In production this would be the user's actual encrypted payload
           encryptedPayload: "DEMO_PAYLOAD" 
         })
       });
@@ -729,7 +729,9 @@ export default function App() {
 
                     <h3 className="text-lg font-bold mt-10 mb-4">Your Credential Ledger</h3>
                     <div className="space-y-4">
-                      {['National ID Proof', 'University Degree', 'Web3 Reputation Score'].map((vc, i) => (
+                      {['National ID Proof', 'University Degree', 'Web3 Reputation Score'].map((vc, i) => {
+                        const stableRefs = ['A1B2C3D4', 'E5F6G7H8', 'I9J0K1L2'];
+                        return (
                         <div key={i} className="glass p-5 rounded-2xl flex items-center justify-between group hover:bg-white/[0.06] transition-all cursor-pointer border border-white/5">
                           <div className="flex items-center gap-4">
                             <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
@@ -737,12 +739,13 @@ export default function App() {
                             </div>
                             <div>
                                <h4 className="font-bold text-sm">{vc}</h4>
-                               <p className="text-[10px] font-mono text-gray-500">Ref: {Math.random().toString(16).slice(2, 10).toUpperCase()}</p>
+                               <p className="text-[10px] font-mono text-gray-500">Ref: {stableRefs[i]}</p>
                             </div>
                           </div>
                           <ChevronRight size={18} className="text-gray-600 group-hover:text-white transform group-hover:translate-x-1 transition-all" />
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </motion.div>
                 )}
