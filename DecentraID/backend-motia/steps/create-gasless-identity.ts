@@ -47,7 +47,7 @@ export const handler = async (req: any, { logger }: any) => {
     await logAudit(did, "GASLESS_IDENTITY_CREATION", "Identity created without blockchain tx");
 
     // 6. Generate shareable link
-    const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const FRONTEND_URL = process.env.FRONTEND_URL || 'https://decentral-id.vercel.app';
     const shareableLink = `${FRONTEND_URL}/import/${shareHash}`;
 
     return {

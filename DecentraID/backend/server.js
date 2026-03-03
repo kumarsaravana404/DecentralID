@@ -666,7 +666,7 @@ app.post('/identity/create-gasless', strictLimiter, [
         await logAudit(did, "GASLESS_IDENTITY_CREATION", "Identity created without blockchain tx");
 
         // 6. Generate shareable link
-        const shareableLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/import/${shareHash}`;
+        const shareableLink = `${process.env.FRONTEND_URL || 'https://decentral-id.vercel.app'}/import/${shareHash}`;
 
         res.json({
             success: true,

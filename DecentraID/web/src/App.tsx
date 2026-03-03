@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Toaster, toast } from 'react-hot-toast';
 import { 
   Shield, 
   Wallet, 
@@ -133,11 +134,11 @@ export default function App() {
         await fetchBalance(accounts[0]);
       } catch (error) {
         console.error("Connection failed:", error);
-        alert("Failed to connect wallet. See console for details.");
+        toast.error("Failed to connect wallet. See console for details.");
       }
     } else {
       console.error("No wallet found");
-      alert("No Ethereum wallet found! Please install MetaMask.");
+      toast.error("No Ethereum wallet found! Please install MetaMask.");
     }
   };
 
@@ -180,7 +181,7 @@ export default function App() {
   const handleRegister = async () => {
     console.log("Starting registration with data:", regData);
     if (!regData.name || !regData.email) {
-      alert("Please fill in Name and Email!");
+      toast.error("Please fill in Name and Email!");
       return;
     }
     
@@ -227,7 +228,7 @@ export default function App() {
 
   const handleGaslessRegister = async () => {
     if(!regData.name || !regData.email) {
-      alert("Please fill in Name and Email!");
+      toast.error("Please fill in Name and Email!");
       return;
     }
     
@@ -262,7 +263,7 @@ export default function App() {
       setLoading(false);
     } catch (e) {
       console.error(e);
-      alert("Gasless creation failed: " + (e as Error).message);
+      toast.error("Gasless creation failed: " + (e as Error).message);
       setLoading(false);
     }
   };
@@ -277,7 +278,7 @@ export default function App() {
     hashToUse = hashToUse.split('?')[0];
 
     if (!hashToUse) {
-      alert("Please enter a valid share hash!");
+      toast.error("Please enter a valid share hash!");
       return;
     }
     
@@ -294,7 +295,7 @@ export default function App() {
       setLoading(false);
     } catch (e) {
       console.error(e);
-      alert("Import failed: " + (e as Error).message);
+      toast.error("Import failed: " + (e as Error).message);
       setLoading(false);
     }
   };
@@ -325,11 +326,11 @@ export default function App() {
         // Clear URL if needed
         window.history.pushState({}, '', '/');
         
-        alert("✅ Identity claimed and anchored on blockchain!");
+        toast.success("✅ Identity claimed and anchored on blockchain!");
         await loadData();
     } catch (e) {
       console.error(e);
-      alert("Claim failed: " + (e as Error).message);
+      toast.error("Claim failed: " + (e as Error).message);
     } finally {
       setLoading(false);
     }
@@ -363,6 +364,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen relative flex flex-col items-center">
+      <Toaster position="top-center" />
       {/* Background Blobs */}
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary neo-blur"></div>
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-secondary neo-blur"></div>
@@ -652,7 +654,7 @@ export default function App() {
                                 <span className="text-gray-500">DID: {identity.did}</span>
                                 <Copy size={14} className="text-gray-500 cursor-pointer hover:text-white transition-colors" onClick={() => {
                                   navigator.clipboard.writeText(identity.did);
-                                  alert("Copied!");
+                                  toast.success("Copied!");
                                 }} />
                               </div>
                                <div className="flex gap-4">
@@ -860,7 +862,7 @@ export default function App() {
                    <button 
                      onClick={() => {
                         navigator.clipboard.writeText(shareableLink);
-                        alert("Copied to clipboard!");
+                        toast.success("Copied to clipboard!");
                      }}
                      className="bg-white/10 hover:bg-white/20 p-2 rounded-lg transition-colors"
                      title="Copy Link"
