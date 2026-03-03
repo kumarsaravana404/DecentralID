@@ -1,257 +1,167 @@
-# DecentraID - Decentralized Identity Platform
-
-A **production-ready** self-sovereign identity (SSI) system built on blockchain technology, enabling users to own and control their digital identities with enterprise-grade security.
-
-**Now features Gasless Identity creation!** Create identities without cryptocurrency and anchor them later.
-
----
-
-## 📋 Table of Contents
-
-1. [Quick Deployment](#-quick-deployment-reference)
-2. [Project Overview](#project-overview)
-3. [System Architecture](#-system-architecture)
-4. [Production Readiness](#-production-readiness)
-5. [Detailed Deployment Guide](#-detailed-deployment-guide)
-6. [Pre-Deployment Checklist](#-pre-deployment-checklist)
-7. [API & Technology](#-api--technology)
-8. [Supabase Integration](#-supabase-integration)
-9. [Experimental Motia Backend](#-experimental-motia-backend)
+<div align="center">
+  <img src="web/public/vite.svg" alt="DecentraID Logo" width="100" />
+  <h1>DecentraID</h1>
+  <p><strong>Decentralized Self-Sovereign Identity (SSI) Protocol</strong></p>
+  <p>Your Identity. Your Control. Zero Gas Needed.</p>
+  
+  <a href="https://decentral-id.vercel.app/"><strong>🌍 View Live Application</strong></a>
+  <span> | </span>
+  <a href="#-getting-started"><strong>💻 Local Setup</strong></a>
+</div>
 
 ---
 
-## 🚀 Quick Deployment Reference
+## 🚀 Overview
 
-> **Total Time:** ~10 minutes
+**DecentraID** is a production-ready Web3 platform that empowers users to fully own, manage, and verify their digital identity on the blockchain.
 
-### 1. Prerequisites (2 minutes)
+By utilizing a **hybrid storage architecture** (AES-256-CBC encrypted off-chain data + on-chain cryptographic anchoring), DecentraID solves the core UX hurdles of Web3 identity management. Features like **Gasless Identity Creation** allow users to generate verifiable identities securely without needing to hold cryptocurrency, paying gas, or even initially connecting a wallet.
 
-1.  **Generate Encryption Key:**
+## ✨ Key Features
 
-    ```bash
-    node -e "console.log(require('crypto').randomBytes(16).toString('hex'))"
-    # Save this 32-character key!
-    ```
-
-2.  **Supabase Setup:**
-    - Create a project at [Supabase](https://supabase.com).
-    - Go to the SQL Editor and run the schema found in `backend/supabase-schema.sql`.
-    - Get your `SUPABASE_URL` and `SUPABASE_ANON_KEY` from Project Settings > API.
-
-### 2. Backend Deployment (Render.com) - 5 minutes
-
-1.  Go to [Render.com](https://render.com) → Sign in → "New +" → "Web Service".
-2.  Connect repo: `kumarsaravana404/DecentralID`.
-3.  Root Directory: `backend`.
-4.  Build Command: `npm install`.
-5.  Start Command: `npm start`.
-6.  **Environment Variables:**
-
-    ```env
-    SUPABASE_URL=https://your-project.supabase.co
-    SUPABASE_ANON_KEY=your-anon-key
-    ENCRYPTION_KEY=<your generated 32-char key>
-    CORS_ORIGIN=https://your-frontend.vercel.app
-    FRONTEND_URL=https://your-frontend.vercel.app
-    NODE_ENV=production
-    ```
-
-7.  Click "Create Web Service". Wait 3-5 mins. Copy backend URL.
-
-### 3. Frontend Deployment (Vercel) - 3 minutes
-
-1.  Run locally:
-
-    ```bash
-    cd web
-    npx vercel login
-    npx vercel --prod
-    ```
-
-2.  Add environment variable in Vercel dashboard:
-    - `VITE_API_URL`: `https://YOUR-SERVICE.onrender.com`
-    - `VITE_SUPABASE_URL`: `https://your-project.supabase.co`
-    - `VITE_SUPABASE_ANON_KEY`: `your-anon-key`
-3.  Redeploy: `npx vercel --prod`. Copy frontend URL.
-
-### 4. Final Config - 1 minute
-
-Update `CORS_ORIGIN` and `FRONTEND_URL` in Render with your actual Vercel URL.
-
----
-
-## Project Overview
-
-**DecentraID** enables users to fully control their digital identity (DID).
-
-### Key Features
-
-- **Self-Sovereign Identity**: Users own their DIDs.
-- **Gasless Identity**: Create identities without ETH.
-- **Verifiable Credentials**: Issue/verify proofs.
-- **Hybrid Storage**: Encrypted Supabase (PostgreSQL) (off-chain) + Ethereum (on-chain anchoring).
-- **Privacy-First**: AES-256-CBC encryption.
-
-### Gasless Workflow
-
-1.  **Create**: User generates identity off-chain (encrypted).
-2.  **Share**: Unique secure link generated.
-3.  **Claim**: Recipient uses wallet to anchor identity on-chain.
-
----
+- **Self-Sovereign Identity (SSI):** Full user control over DIDs (Decentralized Identifiers). Nobody can access your data without your cryptographic consent.
+- **Gasless Onboarding ⚡:** Create a secure, encrypted identity off-chain. Share the generated hash, and let it be claimed and anchored on-chain later. Zero gas required for new users.
+- **Verifiable Credentials:** A trustless proof verification system for issuing and validating credentials (e.g., National ID, University Degrees, Reputations).
+- **Immutable Audit Trails:** Every major action and verification request is cryptographically logged and transparently anchored.
+- **Privacy-First Encryption:** All sensitive personal data is secured using AES-256-CBC encryption before resting in PostgreSQL.
+- **Mobile-Friendly UI:** A beautiful, responsive, and intuitive interface built with React, Tailwind, and Framer Motion.
 
 ## 🏗 System Architecture
 
-```mermaid
-graph TD
-    User[Users (Browsers)] -->|HTTPS| Frontend[Vercel (Frontend)]
-    Frontend -->|API| Backend[Render.com (Backend API)]
-    Backend -->|Database| DB[Supabase (PostgreSQL)]
-    Backend -->|Blockchain| Sepolia[Sepolia Testnet]
-```
+DecentraID utilizes a highly optimized, dual-layer architecture:
+
+1. **Client Layer (Vercel):** A lightning-fast React application handles wallet connections (MetaMask/Ethers.js), client-side state, and UI.
+2. **Relay API (Render.com):** A secure Node.js backend handles encryption, rate-limiting, off-chain state management, and meta-transactions for gasless onboarding.
+3. **Data Layer (Supabase):** Highly structured, Row-Level-Security (RLS) guarded PostgreSQL database for storing encrypted off-chain identity blobs and audit logs.
+4. **Consensus Layer (Ethereum/Sepolia):** Smart contracts act as the ultimate source of truth, anchoring identity creation and verification consents.
+
+## 🛠 Tech Stack
+
+**Frontend:**
+
+- React 18 & TypeScript
+- Vite
+- Tailwind CSS & Framer Motion
+- Ethers.js v6
+
+**Backend:**
+
+- Node.js & Express
+- Supabase (PostgreSQL)
+- Crypto (AES-256-CBC)
+- Winston (Logging)
+
+**Smart Contracts:**
+
+- Solidity
+- Hardhat (Testing & Deployment)
 
 ---
 
-## ✅ Production Readiness
+## 💻 Getting Started
 
-Your DecentraID platform is **100% Production-Ready**.
+Follow these instructions to run the DecentraID platform locally for development and testing.
 
-### Backend (Express + Node.js)
+### 1. Prerequisites
 
-- **Database**: Migrated from MongoDB to **Supabase (PostgreSQL)** for better scalability and real-time features.
-- **Security**: Helmet.js, Rate Limiting (100 req/15min), CORS, Input Validation, Row Level Security (RLS).
-- **Encryption**: AES-256-CBC for all sensitive data.
-- **Logging**: Winston (File + Console).
-- **Monitoring**: Health (`/health`) & Readiness (`/ready`) endpoints.
-- **Infrastructure**: Docker support (`Dockerfile`, `docker-compose.yml`), Render configuration (`render.yaml`).
+- **Node.js**: v18 or newer
+- **Git**
+- **MetaMask**: Browser extension for testing identity creation on the blockchain.
+- **Supabase Account**: For the database instance.
 
-### Frontend (React + Vite)
+### 2. Clone the Repository
 
-- **Optimization**: Terser minification, Code splitting, Asset caching.
-- **Deployment**: Vercel configuration (`vercel.json`), Environment type defs.
+```bash
+git clone https://github.com/kumarsaravana404/DecentralID.git
+cd DecentralID
+```
 
-### Smart Contracts
+### 3. Database Setup (Supabase)
 
-- **Ready**: Contracts for Identity, Verification, and Credentials.
-- **Network**: Configured for Sepolia Testnet.
+1. Create a new project on [Supabase.com](https://supabase.com/).
+2. Navigate to the SQL Editor in your Supabase dashboard.
+3. Open `backend/supabase-schema.sql` from this repository and run the entire SQL script to scaffold the tables and RLS policies.
+4. Retrieve your `Project URL` and `anon public key` from the API Settings.
 
-### Validation
+### 4. Backend Configuration
 
-Run the pre-deployment check:
+Navigate to the backend directory and install dependencies:
 
 ```bash
 cd backend
-npm run check-deploy
+npm install
 ```
 
-- Note: The check script might check for MongoDB; ensure `npm run test:supabase` passes.
+Generate a secure 32-character AES Encryption Key:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(16).toString('hex'))"
+```
+
+Create a `.env` file in the `backend/` directory:
+
+```env
+PORT=5000
+NODE_ENV=development
+FRONTEND_URL=http://localhost:5173
+CORS_ORIGIN=http://localhost:5173
+
+# Database
+SUPABASE_URL=YOUR_SUPABASE_PROJECT_URL
+SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
+
+# Security & Crypto
+ENCRYPTION_KEY=YOUR_GENERATED_32_CHAR_KEY_HERE
+```
+
+Start the backend API:
+
+```bash
+npm run dev
+# The API will run on http://localhost:5000
+```
+
+### 5. Frontend Configuration
+
+Open a new terminal window, navigate to the frontend directory, and install dependencies:
+
+```bash
+cd web
+npm install
+```
+
+Create a `.env` file in the `web/` directory:
+
+```env
+VITE_API_URL=http://localhost:5000
+VITE_NETWORK=sepolia
+```
+
+Start the frontend development server:
+
+```bash
+npm run dev
+# The frontend will run on http://localhost:5173
+```
 
 ---
 
-## 📦 Detailed Deployment Guide
+## 📄 API Documentation
 
-### Environment Variables
+The backend exposes several critical endpoints for identity management:
 
-#### Backend (.env)
+- `POST /identity/create`: Encrypts personal data and prepares it for on-chain anchoring.
+- `POST /identity/create-gasless`: Generates a temporary off-chain identity and a shareable claim hash.
+- `GET /identity/share/:hash`: Retrieves the encrypted preview of a gasless identity.
+- `POST /identity/claim`: Validates a claimed hash and finalizes the identity anchor.
+- `POST /verify/consent`: Logs user consent for a third-party verification request.
+- `GET /audit/logs`: Retrieves the immutable history of actions for a given DID.
 
-| Variable            | Description               |
-| :------------------ | :------------------------ |
-| `SUPABASE_URL`      | Your Supabase Project URL |
-| `SUPABASE_ANON_KEY` | Your Supabase Anon Key    |
-| `ENCRYPTION_KEY`    | 32-char hex string        |
-| `CORS_ORIGIN`       | Frontend URL              |
-| `FRONTEND_URL`      | Frontend URL              |
-| `NODE_ENV`          | `production`              |
-| `PORT`              | `5000`                    |
+## 🤝 Contributing
 
-#### Frontend (.env)
+Contributions, issues, and feature requests are welcome!
+Feel free to check [issues page](https://github.com/kumarsaravana404/DecentralID/issues).
 
-| Variable                 | Description          |
-| :----------------------- | :------------------- |
-| `VITE_API_URL`           | Boolean backend URL  |
-| `VITE_NETWORK`           | `sepolia`            |
-| `VITE_SUPABASE_URL`      | Supabase Project URL |
-| `VITE_SUPABASE_ANON_KEY` | Supabase Anon Key    |
+## 📝 License
 
-### Manual Deployment Steps
-
-#### 1. Backend (Manual)
-
-If not using Render Blueprint:
-
-1.  Create Web Service on Render.
-2.  Root Dir: `backend`.
-3.  Build: `npm install`. Start: `npm start`.
-4.  Set env vars.
-
-#### 2. Smart Contracts
-
-1.  `cd blockchain`
-2.  Configure `.env` with `PRIVATE_KEY` and `SEPOLIA_RPC_URL`.
-3.  `npx hardhat run scripts/deploy-production.js --network sepolia`.
-4.  Update `backend/config.json` with new addresses.
-
----
-
-## ✅ Pre-Deployment Checklist
-
-- [ ] **Backend**: Supabase connected (RLS policies set), Encryption key set, Rate limiting active.
-- [ ] **Frontend**: Build optimized, Vercel env vars set.
-- [ ] **Security**: HTTPS enabled, strong keys used, no secrets in Git.
-- [ ] **Validation**: `npm run test:supabase` passed.
-
----
-
-## 📡 API & Technology
-
-### Tech Stack
-
-- **Frontend**: React 18, TypeScript, Tailwind, Ethers.js
-- **Backend**: Node.js, Express, Winston, **Supabase Services**
-- **Database**: **Supabase (PostgreSQL)**
-- **Blockchain**: Solidity, Hardhat
-
-### Core Endpoints
-
-- `POST /identity/create`: Create regular identity.
-- `POST /identity/create-gasless`: Create off-chain identity.
-- `GET /identity/share/:hash`: Retrieve gasless identity.
-- `POST /identity/claim`: Anchor identity.
-- `GET /audit/logs`: Fetch audit history.
-- `GET /config`: Contract addresses.
-
----
-
-## ⚡ Supabase Integration
-
-The project has been migrated to Supabase.
-
-### Quick Start
-
-1.  **Run SQL Schema**:
-    - Open `backend/supabase-schema.sql`.
-    - Run the SQL in your Supabase project's SQL Editor.
-
-2.  **Test Connection**:
-    - `cd backend`
-    - `npm run test:supabase`
-
-### Key Files
-
-- `backend/supabaseClient.js`: Connection logic.
-- `backend/supabase-schema.sql`: Database schema.
-- `backend/services/*.js`: Service layer replacing Mongoose models.
-
----
-
-## 🧪 Experimental Motia Backend
-
-> **Note:** The active production backend is located in `backend/` (Express.js + Supabase).
-
-An experimental backend using the **Motia** framework is located in `backend-motia/`. It features a unified step-based architecture and is TypeScript-native. To use it, update `render.yaml` to point `rootDir` to `DecentraID/backend-motia`.
-
----
-
-## 📄 License
-
-MIT
+This project is [MIT](https://opensource.org/licenses/MIT) licensed.
