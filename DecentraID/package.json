@@ -9,7 +9,7 @@
     "backend": "cd backend && node server.js",
     "frontend": "cd web && npm run dev",
     "dev": "concurrently -k -n \"CHAIN,DEPLOY,BACKEND,WEB\" -c \"blue,green,magenta,cyan\" \"npm run chain\" \"wait-on tcp:8545 && npm run deploy && npm run backend\" \"wait-on tcp:8545 && wait-on file:web/config.json && npm run frontend\"",
-    "demo": "concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix web\""
+    "demo": "concurrently -k -n \"BACKEND,FRONTEND\" -c \"magenta,cyan\" \"cd backend && npm run dev\" \"cd web && npm run dev\""
   },
   "dependencies": {
     "concurrently": "^8.2.2",

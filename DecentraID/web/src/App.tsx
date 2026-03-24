@@ -49,7 +49,7 @@ export default function App() {
 
   useEffect(() => {
     init();
-  }, [shareableLink]);
+  }, []);
 
   // Detect import hash from URL
   useEffect(() => {
@@ -77,32 +77,47 @@ export default function App() {
     if (typeof window.ethereum !== 'undefined') {
       try {
         const provider = new ethers.BrowserProvider(window.ethereum);
-        const res = await fetch(`${API_URL}/config`);
-        const config = await res.json();
         
-        const signer = await provider.getSigner();
-        const IdentityRegistryABI = [
-          "function registerIdentity(address user, string ipfsHash) external",
-          "function getIdentity(address user) external view returns (string, bool, uint256, uint256)",
-          "function revokeIdentity() external",
-        ];
-        const VerificationRegistryABI = [
-          "function getUserRequests(address user) external view returns (tuple(uint256 id, address verifier, address user, string purpose, uint8 status, uint256 timestamp, uint256 confirmedAt)[])",
-          "function grantConsent(uint256 requestId) external",
-          "event VerificationRequested(uint256 indexed requestId, address indexed verifier, address indexed user, string purpose)"
-        ];
-
-        setContracts({
-          identity: new ethers.Contract(config.IdentityRegistry, IdentityRegistryABI, signer),
-          verification: new ethers.Contract(config.VerificationRegistry, VerificationRegistryABI, signer),
-          config
-        });
-
+        // Check if wallet is already connected
         const accounts = await provider.listAccounts();
         if (accounts.length > 0) {
           const address = accounts[0].address;
           setWallet(address);
           fetchBalance(address);
+        }
+
+        // Try to load smart contract config
+        try {
+          const res = await fetch(`${API_URL}/config`);
+          if (!res.ok) throw new Error('Config endpoint failed');
+          const config = await res.json();
+
+          // Only setup contracts if addresses are valid (not zero address)
+          const ZERO = '0x0000000000000000000000000000000000000000';
+          if (config.IdentityRegistry && config.IdentityRegistry !== ZERO && config.IdentityRegistry !== '0x') {
+            const signer = await provider.getSigner().catch(() => null);
+            if (signer) {
+              const IdentityRegistryABI = [
+                "function registerIdentity(address user, string ipfsHash) external",
+                "function getIdentity(address user) external view returns (string, bool, uint256, uint256)",
+                "function revokeIdentity() external",
+              ];
+              const VerificationRegistryABI = [
+                "function getUserRequests(address user) external view returns (tuple(uint256 id, address verifier, address user, string purpose, uint8 status, uint256 timestamp, uint256 confirmedAt)[])",
+                "function grantConsent(uint256 requestId) external",
+                "event VerificationRequested(uint256 indexed requestId, address indexed verifier, address indexed user, string purpose)"
+              ];
+              setContracts({
+                identity: new ethers.Contract(config.IdentityRegistry, IdentityRegistryABI, signer),
+                verification: new ethers.Contract(config.VerificationRegistry, VerificationRegistryABI, signer),
+                config
+              });
+            }
+          } else {
+            console.warn('Smart contract addresses not configured. Blockchain features disabled. Using gasless mode.');
+          }
+        } catch (configErr) {
+          console.warn('Could not load contract config:', configErr);
         }
       } catch (e) {
         console.error("Initialization failed", e);
@@ -132,6 +147,8 @@ export default function App() {
         const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
         setWallet(accounts[0]);
         await fetchBalance(accounts[0]);
+        // Re-run init to set up contracts now that wallet is connected
+        await init();
       } catch (error) {
         console.error("Connection failed:", error);
         toast.error("Failed to connect wallet. See console for details.");
@@ -222,6 +239,7 @@ export default function App() {
       setLoading(false);
     } catch (e) {
       console.error(e);
+      toast.error("Registration failed: " + (e as Error).message);
       setLoading(false);
     }
   };
